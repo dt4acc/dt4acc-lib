@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dt4acc-lib"
+version = "0.2.0"
+description = "digital twin for accelerators: library part"
+authors = [
+  { name = "Waheedullah Sulaiman Khail" },
+  { name = "Pierre Schnizer" },
+]
+license = { text = "GPL-3.0" }
+requires-python = ">=3.7"
+keywords = []
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: GNU General Public License (GPL)",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Physics",
+]
+
+dependencies = [
+#    "accelerator-toolbox",
+#    "transitions",
+  "jsons",
+]
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dt4acc_lib"]
+
+[tool.hatch.build]
+dev-mode-dirs = ["src"]
+
+
+[project.urls]
+Homepage = "https://github.com/dt4acc/dt4acc-lib"
+Documentation = "https://github.com/dt4acc/dt4acc-lib"
+Repository = "https://github.com/dt4acc/dt4acc-lib.git"
+
+[project.optional-dependencies]
+docs = [
+  "Sphinx==4.2.0",
+  "sphinx-rtd-theme==1.0.0",
+  "sphinxcontrib-napoleon==0.7",
+]
