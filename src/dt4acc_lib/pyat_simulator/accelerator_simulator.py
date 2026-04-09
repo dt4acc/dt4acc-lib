@@ -58,12 +58,23 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
     #    tune = ring_pars["tune"]
     #    return Tune(x=tune[0], y=tune[1])
 
+    def get_element_by_uuid(self, uuid: str):
+        """Find a single AT element by its UUID attribute."""
+        for elem in self.acc:
+            if getattr(elem, "UUID", None) == uuid:
+                return elem
+        return None
+
     def get(self, element_id):
         """
         Retrieve an element proxy based on the given element ID.
 
+        Tries in order:
+          1. FamName lookup via self.acc[element_id] (unique single element)
+          2. UUID lookup — iterates lattice to find element with matching UUID
+
         Args:
-            element_id (str): The ID of the element to retrieve.
+            element_id (str): FamName or UUID of the element to retrieve.
 
         Returns:
             ElementProxy: The proxy object for the requested element.
@@ -71,28 +82,34 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
         Raises:
             ValueError: If the element is not found in the lattice.
         """
-
-        sub_lattice = self.acc[element_id]
-        # single element expected in sub lattice
+        # --- 1. Try FamName lookup ---
         try:
+            sub_lattice = self.acc[element_id]
+            try:
+                (_,) = sub_lattice
+                return ElementProxy(sub_lattice, element_id=element_id)
+            except ValueError:
+                pass  # more than one element — fall through to UUID lookup
+        except Exception:
+            pass  # element_id not a valid FamName — try UUID
+
+        # --- 2. Try UUID lookup ---
+        elem = self.get_element_by_uuid(element_id)
+        if elem is not None:
+            return ElementProxy((elem,), element_id=element_id)
+
+        # --- 3. Try steerer host lookup (H*/V* prefix convention) ---
+        try:
+            host_element_id = self.get_element_id_of_host(element_id)
+            sub_lattice = self.acc[host_element_id]
             (_,) = sub_lattice
-            found_sub_lattice = True
-        except ValueError:
-            found_sub_lattice = False
+            return self.instantiate_addon_proxy(
+                sub_lattice, element_id=element_id, host_element_id=host_element_id
+            )
+        except (ValueError, Exception):
+            pass
 
-        if found_sub_lattice and sub_lattice:
-            return ElementProxy(sub_lattice, element_id=element_id)
-
-        host_element_id = self.get_element_id_of_host(element_id)
-        sub_lattice = self.acc[host_element_id]
-        # single element expected in sublattice
-        (_,) = sub_lattice
-        if not sub_lattice:
-            raise ValueError(f"Element with ID {element_id} not found")
-
-        return self.instantiate_addon_proxy(
-            sub_lattice, element_id=element_id, host_element_id=host_element_id
-        )
+        raise ValueError(f"Unknown element id: {element_id}")
 
     @staticmethod
     def get_element_id_of_host(element_id: str) -> str:
