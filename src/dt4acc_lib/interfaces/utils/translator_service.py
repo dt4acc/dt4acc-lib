@@ -2,7 +2,7 @@ from abc import ABCMeta, abstractmethod
 
 
 from .state_conversion import StateConversion
-from ...model.utils.identifiers import ConversionID
+from dt4acc_lib.model.utils.identifiers import ConversionID
 
 
 class TranslatorServiceBase(metaclass=ABCMeta):

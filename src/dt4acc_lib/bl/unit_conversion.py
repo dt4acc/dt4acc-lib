@@ -1,6 +1,6 @@
 import logging
 
-from ..interfaces.utils.state_conversion import StateConversion
+from dt4acc_lib.interfaces.utils.state_conversion import StateConversion
 
 logger = logging.getLogger("accml")
 

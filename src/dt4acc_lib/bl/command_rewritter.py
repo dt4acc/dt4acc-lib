@@ -6,12 +6,12 @@ Please note:
 
 from typing import Sequence
 
-from ..model.utils.command import ReadCommand
-from ...core.interfaces.utils.command_rewritter import CommandRewriterBase
-from ...core.interfaces.utils.liaison_manager import LiaisonManagerBase
-from ...core.interfaces.utils.translator_service import TranslatorServiceBase
-from ...core.model.utils.command import Command
-from ...core.model.utils.identifiers import (
+from dt4acc_lib.model.utils.command import ReadCommand
+from dt4acc_lib.interfaces.utils.command_rewritter import CommandRewriterBase
+from dt4acc_lib.interfaces.utils.liaison_manager import LiaisonManagerBase
+from dt4acc_lib.interfaces.utils.translator_service import TranslatorServiceBase
+from dt4acc_lib.model.utils.command import Command
+from dt4acc_lib.model.utils.identifiers import (
     DevicePropertyID,
     LatticeElementPropertyID,
     ConversionID,

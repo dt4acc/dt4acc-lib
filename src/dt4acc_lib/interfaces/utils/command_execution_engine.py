@@ -1,8 +1,8 @@
 from abc import ABCMeta, abstractmethod
 from typing import Sequence
 
-from ...model.utils.command import ReadCommand, Command
-from ...model.output.result import ReadTogether
+from dt4acc_lib.model.utils.command import ReadCommand, Command
+from dt4acc_lib.model.output.result import ReadTogether
 
 
 class CommandExecutionEngine(metaclass=ABCMeta):

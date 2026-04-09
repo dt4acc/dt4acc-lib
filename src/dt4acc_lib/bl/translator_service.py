@@ -3,12 +3,12 @@ import logging
 from typing import Union
 
 from .tune_translator import TuneConversion
-from ...core.bl.identity_conversion import identity_conversion
-from ...core.bl.unit_conversion import LinearUnitConversion, EnergyDependentLinearUnitConversion
-from ...core.interfaces.utils.state_conversion import StateConversion
-from ...core.interfaces.utils.translator_service import TranslatorServiceBase
-from ...core.model.utils.identifiers import ConversionID
-from ..model.utils.translator_manager_lookup_table import TranslatorLookupTable, PolynomCoefficients, \
+from dt4acc_lib.bl.identity_conversion import identity_conversion
+from dt4acc_lib.bl.unit_conversion import LinearUnitConversion, EnergyDependentLinearUnitConversion
+from dt4acc_lib.interfaces.utils.state_conversion import StateConversion
+from dt4acc_lib.interfaces.utils.translator_service import TranslatorServiceBase
+from dt4acc_lib.model.utils.identifiers import ConversionID
+from dt4acc_lib.model.utils.translator_manager_lookup_table import TranslatorLookupTable, PolynomCoefficients, \
     TuneConversionCoefficients, IdentityMapper
 
 

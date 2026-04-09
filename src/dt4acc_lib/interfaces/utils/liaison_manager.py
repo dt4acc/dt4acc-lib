@@ -1,7 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from typing import Sequence
 
-from ....core.model.utils.identifiers import DevicePropertyID, LatticeElementPropertyID
+from dt4acc_lib.model.utils.identifiers import DevicePropertyID, LatticeElementPropertyID
 
 
 class LiaisonManagerBase(metaclass=ABCMeta):

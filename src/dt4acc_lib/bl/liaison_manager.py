@@ -1,12 +1,12 @@
 import logging
-from typing import Mapping, Sequence
+from typing import Sequence
 
-from dt4acc_lib.core.interfaces.utils.liaison_manager import LiaisonManagerBase
-from dt4acc_lib.core.model.utils.identifiers import (
+from dt4acc_lib.interfaces.utils.liaison_manager import LiaisonManagerBase
+from dt4acc_lib.model.utils.identifiers import (
     LatticeElementPropertyID,
     DevicePropertyID,
 )
-from dt4acc_lib.core.model.utils.liaison_manager_lookup_table import (
+from dt4acc_lib.model.utils.liaison_manager_lookup_table import (
     LiaisonManagerInverseLookupTable,
     LiaisonManagerForwardLookupTable
 )

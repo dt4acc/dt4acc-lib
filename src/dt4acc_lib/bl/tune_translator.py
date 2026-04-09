@@ -1,4 +1,4 @@
-from ...core.model.output.tune import Tune
+from dt4acc_lib.model.output.tune import Tune
 
 
 class TuneConversion:
