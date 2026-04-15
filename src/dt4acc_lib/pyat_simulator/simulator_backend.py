@@ -187,8 +187,14 @@ class SimulatorBackend(BackendRW):
         return elem.peek(prop_id)
 
     async def set(self, dev_id: str, prop_id: str, value: object):
-        # set state to changed
         with self.calculation_lock:
+            # Guard against error state — changed() is only valid from
+            # finished or pending. If in error, reject the set.
+            if self.model.is_error():
+                raise ValueError(
+                    f"SimulatorBackend is in error state — "
+                    f"call Reset before writing ({dev_id}.{prop_id})"
+                )
             self.model.changed()
             elem = self.acc.get(dev_id)
             r = await elem.update(property_id=prop_id, value=value)
@@ -230,7 +236,7 @@ class SimulatorBackend(BackendRW):
         elem_names = [elem.FamName for elem in self.acc.acc]
         # optics repeats data for the first element
         self.elem_names = elem_names + [elem_names[0]]
-        logger.info("Calculated optics x0 = %s", optics[0])
+        logger.debug("Calculated optics x0 = %s", optics[0])
         # logger.info("Calculated optics (twiss) ?to x=%.4f y=%.4f", self.tune.x, self.tune.y)
 
 
