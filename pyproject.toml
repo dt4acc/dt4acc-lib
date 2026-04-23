@@ -22,8 +22,8 @@ classifiers = [
 ]
 
 dependencies = [
-#    "accelerator-toolbox",
-#    "transitions",
+  "accelerator-toolbox",
+  "transitions",
   "jsons",
 ]
 
