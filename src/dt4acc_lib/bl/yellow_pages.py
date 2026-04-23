@@ -1,11 +1,16 @@
 from enum import Enum
-from typing import Sequence, Union
+from typing import Sequence, Union, Dict
 
 from dt4acc_lib.interfaces.utils.yellow_pages import YellowPagesBase
 
 
 class FamilyName(Enum):
+    beam_position_monitors = "beam_position_monitors"
     quadrupoles = "quadrupoles"
+    sextupoles = "sextupoles"
+    steerers = "steerers"
+    horizontal_steerers = "horizontal_steerers"
+    vertical_steerers = "vertical_steerers"
     tune_correction_quadrupoles = "tune_correction_quadrupoles"
     master_clock = "master_clock"
 
@@ -17,8 +22,11 @@ class YellowPages(YellowPagesBase):
     separate yellow pages for lattice elements and devices
     """
 
-    def __init__(self, d: dict):
+    def __init__(self, d: Dict[str, Sequence[str]]):
         self._d = d
+
+    def get_families(self) -> Sequence[str]:
+        return tuple(self._d.keys())
 
     def get(self, family_name: Union[str, FamilyName]) -> Sequence[str]:
         # check for valid key?
