@@ -70,7 +70,7 @@ class LiaisonManager(LiaisonManagerBase):
         logger.error(
             f"{self.__class__.__name__} id {id_} not found in lookup table"
         )
-        em = self.objects_for_device(id_.element_name)
+        em = self.device_properties(id_.element_name)
         logger.warning(f"{self.__class__.__name__}: For the element I know {em}")
         raise KeyError(f"forward lut does not contain entry {id_}")
 
@@ -83,7 +83,7 @@ class LiaisonManager(LiaisonManagerBase):
             f"{self.__class__.__name__} id {id_} not found in lookup table"
         )
 
-        od = self.objects_for_device(id_.device_name)
+        od = self.device_properties(id_.device_name)
         logger.warning(f"{self.__class__.__name__}: For the device I know {od}")
 
         # Todo: give the user a hint what we know and what is close to what we know
@@ -95,16 +95,16 @@ class LiaisonManager(LiaisonManagerBase):
     def known_device_elements(self) -> Sequence[str]:
         return [key.device_name for key in self.inverse_lut.keys()]
 
-    def objects_for_lattice_element(self, elem_name: str):
+    def lattice_element_properties(self, elem_name: str):
         return {
-            key : self.forward_lut.get(key)
+            key.property: self.forward_lut.get(key)
             for key in self.forward_lut.keys()
             if elem_name == key.element_name
         }
 
-    def objects_for_device(self, dev_name: str):
+    def device_properties(self, dev_name: str):
         return {
-            key : self.inverse_lut.get(key)
+            key.property : self.inverse_lut.get(key)
             for key in self.inverse_lut.keys()
             if dev_name == key.device_name
         }
