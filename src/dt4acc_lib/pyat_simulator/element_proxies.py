@@ -53,6 +53,16 @@ def manipulate_kick(
         kick_angles[1] = kick_y
     return kick_angles
 
+def guess_multipole_main_strength_index(element, property_id: str):
+    """Guessing main strength for multipole by finding the coefficient with the largest value at rref
+
+    TANGO_2ND: AN01-AR/EM-COR/OH.01-CQLN.01 // slow normal
+    TANGO_3RD: AN01-AR/EM-COR/OH.01-CQLT.01 //slow turned
+    """
+    rref = 10e-3
+    mul = np.absolute(element.PolynomB) * rref ** np.arange(len(element.PolynomB))
+    idx = mul.argmax()
+    return idx
 
 class ElementProxy(ElementInterface):
     """
@@ -176,6 +186,23 @@ class ElementProxy(ElementInterface):
                 element.update(H=value)
             elif "Quadrupole" in element_type:
                 element.update(K=value)
+            elif "Octupole" in element_type:
+                # Octupole main strength is PolynomB[3] = K3
+                # Must copy array — AT arrays are not always writable in-place
+                polynom_b = element.PolynomB.copy()
+                polynom_b[3] = float(value)
+                element.PolynomB = polynom_b
+            elif "Multipole" in element_type:
+                # todo review how to handle multipoles with several components
+                idx = guess_multipole_main_strength_index(element, property_id)
+                if idx == 1:
+                    element.update(K=value)
+                elif idx == 2:
+                    element.update(H=value)
+                else:
+                    raise NotImplementedError(
+                        f"setting main strength for multipole index {idx} not yet implemented"
+                    )
             else:
                 raise NotImplementedError(
                     f"Don't know how to set main strength for element {element_type}"
@@ -229,6 +256,10 @@ class ElementProxy(ElementInterface):
                     f"Not handling {property_id} for element {element_type}"
                 )
             return element.H
+        elif element_type == "Octupole":
+            # Main strength is PolynomB[3] = K3
+            assert property_id in ["main_strength"]
+            return float(element.PolynomB[3])
         else:
             raise NotImplementedError(
                 f"main strength not implemented for element {element_type}"
@@ -330,3 +361,128 @@ class KickAngleCorrectorProxy(AddOnElementProxy):
             return element.KickAngle[1]
         else:
             raise ValueError(f"Unexpected property {property_id} for kick corrector")
+
+
+class SkewQuadCorrectorProxy(AddOnElementProxy):
+    """
+    Proxy for a secondary quadrupolar corrector coil mounted on a host element
+    (typically an octupole in SOLEIL II, but generic to any facility).
+
+    In pyAT the host element holds both its main field and the corrector
+    coil field in the same PolynomA/PolynomB arrays:
+
+        corrector_type="skew"   →  PolynomA[1]  (skew quadrupole, coupling)
+        corrector_type="normal" →  PolynomB[1]  (normal quadrupole component)
+
+    The property exposed to the Tango layer is "skew_quad_strength".
+
+    The mapping from facility nomenclature to corrector_type is done in
+    the facility-specific setup (e.g. ADDON_PROXY_REGISTRY in
+    liasion_translator_setup.py):
+        SOLEIL CQLN  →  corrector_type="skew"
+        SOLEIL CQLT  →  corrector_type="normal"
+
+    Parameters
+    ----------
+    corrector_type : "skew" | "normal"
+        "skew"   → sets/reads PolynomA[1]  (skew quadrupole)
+        "normal" → sets/reads PolynomB[1]  (normal quadrupole)
+    """
+
+    def __init__(self, obj, *, corrector_type: str = "skew", **kwargs):
+        super().__init__(obj, **kwargs)
+        if corrector_type not in ("skew", "normal"):
+            raise ValueError(
+                f"Unknown corrector_type {corrector_type!r}, expected 'skew' or 'normal'"
+            )
+        self.corrector_type = corrector_type
+
+    def __str__(self):
+        return (
+            f"{self.__class__.__name__}({self._obj}, element_id={self.element_id}, "
+            f"host_element_id={self.host_element_id}, corrector_type={self.corrector_type})"
+        )
+
+    def _get_element(self):
+        if isinstance(self._obj, (list, tuple)) and len(self._obj) == 1:
+            return self._obj[0]
+        return self._obj
+
+    async def update(self, property_id: str, value):
+        """
+        Set the quadrupole corrector strength on the host element.
+
+        property_id must be "skew_quad_strength".
+
+        corrector_type="skew"   → PolynomA[1] = value  (skew quad, coupling)
+        corrector_type="normal" → PolynomB[1] = value  (normal quad component)
+        """
+        assert property_id[:6] != "delta_", (
+            f"properties like {property_id} starting with delta should not end up here"
+        )
+        if property_id != "skew_quad_strength":
+            raise ValueError(
+                f"SkewQuadCorrectorProxy only handles 'skew_quad_strength', got {property_id!r}"
+            )
+        if value is not None:
+            assert np.isfinite(value), "Value must be finite"
+
+        element = self._get_element()
+
+        if self.corrector_type == "skew":
+            polynom_a = element.PolynomA.copy()
+            polynom_a[1] = float(value)
+            element.PolynomA = polynom_a
+        else:
+            polynom_b = element.PolynomB.copy()
+            polynom_b[1] = float(value)
+            element.PolynomB = polynom_b
+
+        logger.debug(
+            "SkewQuadCorrectorProxy.update: %s[%s].%s[1] = %s",
+            self.host_element_id,
+            self.corrector_type,
+            "PolynomA" if self.corrector_type == "skew" else "PolynomB",
+            value,
+        )
+
+    def peek(self, property_id: str) -> float:
+        """Read the current corrector strength from the host element."""
+        assert property_id[:6] != "delta_", (
+            f"properties like {property_id} starting with delta should not end up here"
+        )
+        if property_id != "skew_quad_strength":
+            raise ValueError(
+                f"SkewQuadCorrectorProxy only handles 'skew_quad_strength', got {property_id!r}"
+            )
+
+        element = self._get_element()
+
+        if self.corrector_type == "skew":
+            return float(element.PolynomA[1])
+        else:
+            return float(element.PolynomB[1])
+
+
+# ---------------------------------------------------------------------------
+# Addon proxy registry
+# ---------------------------------------------------------------------------
+# Maps a type-prefix string (the part before ":" in a compound element_id
+# like "CQLN:<host_uuid>") to a factory callable:
+#
+#   factory(element, element_id, host_element_id) -> AddOnElementProxy
+#
+# Facilities register their own proxy types here. The core
+# accelerator_simulator.get() uses this registry and stays generic.
+#
+# Example registration (done by SOLEIL setup code, not by the core):
+#
+#   from dt4acc_lib.pyat_simulator.element_proxies import ADDON_PROXY_REGISTRY, SkewQuadCorrectorProxy
+#   ADDON_PROXY_REGISTRY["CQLN"] = lambda el, eid, hid: SkewQuadCorrectorProxy(
+#       el, element_id=eid, host_element_id=hid, corrector_type="CQLN"
+#   )
+#   ADDON_PROXY_REGISTRY["CQLT"] = lambda el, eid, hid: SkewQuadCorrectorProxy(
+#       el, element_id=eid, host_element_id=hid, corrector_type="CQLT"
+#   )
+
+ADDON_PROXY_REGISTRY: dict = {}

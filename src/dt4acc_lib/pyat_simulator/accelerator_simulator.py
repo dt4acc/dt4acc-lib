@@ -1,6 +1,4 @@
-
-
-from .element_proxies import ElementProxy, KickAngleCorrectorProxy
+from .element_proxies import ElementProxy, ADDON_PROXY_REGISTRY
 from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface
 import at
 
@@ -58,81 +56,84 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
     #    tune = ring_pars["tune"]
     #    return Tune(x=tune[0], y=tune[1])
 
-    def get_element_by_uuid(self, uuid: str):
-        """Find a single AT element by its UUID attribute."""
-        for elem in self.acc:
-            if getattr(elem, "UUID", None) == uuid:
-                return elem
-        return None
+    def _find_by_uuid(self, uuid: str):
+        """
+        Find a single element in the lattice by its UUID attribute.
+        Returns [element] or raises ValueError if not found or ambiguous.
+        UUID is unique per physical magnet — multiple JSON entries
+        (main magnet + steerers) share the same UUID because they are
+        coils on the same AT element.
+        """
+        matches = [
+            elem for elem in self.acc
+            if getattr(elem, "UUID", None) == uuid
+        ]
+        if len(matches) == 0:
+            return None
+        # Return the first match — multiple elements can share a UUID
+        # (e.g. split elements) but they are physically the same magnet
+        return [matches[0]]
 
     def get(self, element_id):
         """
         Retrieve an element proxy based on the given element ID.
 
-        Tries in order:
-          1. FamName lookup via self.acc[element_id] (unique single element)
-          2. UUID lookup — iterates lattice to find element with matching UUID
+        element_id is always a UUID from the JSON database (design view).
+        The AT lattice element is found by matching element.UUID == element_id.
 
-        Args:
-            element_id (str): FamName or UUID of the element to retrieve.
+        FamName is NOT used — it is not unique across the ring
+        (many sextupoles share the same FamName across different sectors).
 
-        Returns:
-            ElementProxy: The proxy object for the requested element.
-
-        Raises:
-            ValueError: If the element is not found in the lattice.
+        Compound ids "<type_prefix>:<host_uuid>" (e.g. "CQLN:OH2_001") are
+        resolved via ADDON_PROXY_REGISTRY populated by facility-specific setup.
         """
-        # --- 1. Try FamName lookup ---
-        try:
-            sub_lattice = self.acc[element_id]
-            try:
-                (_,) = sub_lattice
-                return ElementProxy(sub_lattice, element_id=element_id)
-            except ValueError:
-                pass  # more than one element — fall through to UUID lookup
-        except Exception:
-            pass  # element_id not a valid FamName — try UUID
+        # 1. Compound id: "<type_prefix>:<host_uuid>" → registry
+        if ":" in element_id:
+            type_prefix, host_uuid = element_id.split(":", 1)
+            factory = ADDON_PROXY_REGISTRY.get(type_prefix)
+            if factory is None:
+                raise ValueError(
+                    f"No proxy registered for type prefix {type_prefix!r}. "
+                    f"Register it in element_proxies.ADDON_PROXY_REGISTRY before use."
+                )
+            matches = self._find_by_uuid(host_uuid)
+            if matches is None:
+                raise ValueError(
+                    f"Host element with UUID {host_uuid!r} not found in lattice."
+                )
+            (element,) = matches
+            return factory(element, element_id, host_uuid)
 
-        # --- 2. Try UUID lookup ---
-        elem = self.get_element_by_uuid(element_id)
-        if elem is not None:
-            return ElementProxy((elem,), element_id=element_id)
+        # 2. UUID attribute search — the only correct lookup method
+        matches = self._find_by_uuid(element_id)
+        if matches is not None:
+            return ElementProxy(matches, element_id=element_id)
 
-        # --- 3. Try steerer host lookup (H*/V* prefix convention) ---
-        try:
-            host_element_id = self.get_element_id_of_host(element_id)
-            sub_lattice = self.acc[host_element_id]
-            (_,) = sub_lattice
-            return self.instantiate_addon_proxy(
-                sub_lattice, element_id=element_id, host_element_id=host_element_id
-            )
-        except (ValueError, Exception):
-            pass
-
-        raise ValueError(f"Unknown element id: {element_id}")
+        raise ValueError(
+            f"Element with UUID {element_id!r} not found in lattice. "
+            f"Check that element.UUID in the AT .m file matches the JSON uuid field."
+        )
 
     @staticmethod
     def get_element_id_of_host(element_id: str) -> str:
         """
         Derives the host element ID from the provided element ID.
+        Used by the EPICS path (H/V prefix convention).
 
         Args:
             element_id (str): The ID of the element.
 
         Returns:
             str: The ID of the host element.
-
-        Raises:
-            ValueError: If the element ID cannot be processed.
         """
         if element_id.startswith("H") or element_id.startswith("V"):
             return element_id[1:]
-
         raise ValueError(f"Unknown element id: {element_id}")
 
     def instantiate_addon_proxy(self, sub_lattice, *, element_id, host_element_id):
         """
         Instantiates the correct proxy for the given sub lattice and element ID.
+        Used by the EPICS path (H/V prefix convention).
 
         Args:
             sub_lattice: The AT sub lattice containing the element.
@@ -141,27 +142,17 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
 
         Returns:
             KickAngleCorrectorProxy: The proxy instance for the element.
-
-        Raises:
-            ValueError: If the element ID type is unsupported.
-
-        Warning:
-            this code should not be used any more
         """
-
-        # raise AssertionError("Code should not be used any more")
+        from .element_proxies import KickAngleCorrectorProxy
 
         if not host_element_id.startswith("S"):
             raise ValueError(f"Unsupported host element ID: {host_element_id}")
 
         correction_plane = (
-            "horizontal"
-            if element_id.startswith("H")
-            else "vertical"
-            if element_id.startswith("V")
+            "horizontal" if element_id.startswith("H")
+            else "vertical" if element_id.startswith("V")
             else None
         )
-
         if correction_plane is None:
             raise ValueError(f"Unknown correction plane for element ID: {element_id}")
 
