@@ -58,36 +58,73 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
 
     def _find_by_uuid(self, uuid: str):
         """
-        Find a single element in the lattice by its UUID attribute.
-        Returns [element] or raises ValueError if not found or ambiguous.
-        UUID is unique per physical magnet — multiple JSON entries
-        (main magnet + steerers) share the same UUID because they are
-        coils on the same AT element.
+        Find element(s) in the lattice by UUID or FamName.
+
+        Strategy (in order):
+        1. UUID attribute match: element.UUID == uuid  (SOLEIL .m lattice)
+        2. FamName match: element.FamName == uuid      (MAX IV JSON lattice)
+
+        Returns [element] or None if not found.
         """
+        # 1. UUID attribute search (SOLEIL)
         matches = [
             elem for elem in self.acc
             if getattr(elem, "UUID", None) == uuid
         ]
-        if len(matches) == 0:
-            return None
-        # Return the first match — multiple elements can share a UUID
-        # (e.g. split elements) but they are physically the same magnet
-        return [matches[0]]
+        if matches:
+            return [matches[0]]
+
+        # 2. FamName search (MAX IV JSON lattice)
+        matches = [
+            elem for elem in self.acc
+            if getattr(elem, "FamName", None) == uuid
+        ]
+        if matches:
+            return [matches[0]]
+
+        return None
+
+    def _find_by_uuids(self, uuids: list):
+        """
+        Find multiple elements by a list of FamName/UUID strings.
+        Returns a list of elements in the same order as uuids.
+        Used for multi-element devices (e.g. SQFI: 4 AT elements per magnet).
+        Elements not found are silently skipped.
+        """
+        result = []
+        for uuid in uuids:
+            matches = self._find_by_uuid(uuid)
+            if matches:
+                result.extend(matches)
+        return result if result else None
 
     def get(self, element_id):
         """
         Retrieve an element proxy based on the given element ID.
 
-        element_id is always a UUID from the JSON database (design view).
-        The AT lattice element is found by matching element.UUID == element_id.
+        element_id can be:
+          - A single UUID string (SOLEIL): matched via element.UUID attribute
+          - A single FamName string (MAX IV): matched via element.FamName
+          - A list of FamName strings (MAX IV multi-element): all matched,
+            returned as a group proxy so writes apply to all elements
+          - A compound string "<prefix>:<host>" (CQLN/skew): resolved via
+            ADDON_PROXY_REGISTRY
 
-        FamName is NOT used — it is not unique across the ring
-        (many sextupoles share the same FamName across different sectors).
-
-        Compound ids "<type_prefix>:<host_uuid>" (e.g. "CQLN:OH2_001") are
-        resolved via ADDON_PROXY_REGISTRY populated by facility-specific setup.
+        Compound ids "<type_prefix>:<host_uuid>" (e.g. "CQLN:OH2_001",
+        "skew:69") are resolved via ADDON_PROXY_REGISTRY populated by
+        facility-specific setup.
         """
-        # 1. Compound id: "<type_prefix>:<host_uuid>" → registry
+        # 0. Array of uuids — multi-element device (MAX IV SQFI/SXDI/etc.)
+        if isinstance(element_id, list):
+            elements = self._find_by_uuids(element_id)
+            if elements is None:
+                raise ValueError(
+                    f"No elements found for uuid list {element_id!r}. "
+                    f"Check FamNames match the AT JSON lattice."
+                )
+            return ElementProxy(elements, element_id=element_id[0])
+
+        # 1. Compound id: "<type_prefix>:<host>" → ADDON_PROXY_REGISTRY
         if ":" in element_id:
             type_prefix, host_uuid = element_id.split(":", 1)
             factory = ADDON_PROXY_REGISTRY.get(type_prefix)
@@ -99,19 +136,20 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
             matches = self._find_by_uuid(host_uuid)
             if matches is None:
                 raise ValueError(
-                    f"Host element with UUID {host_uuid!r} not found in lattice."
+                    f"Host element with UUID/FamName {host_uuid!r} not found in lattice."
                 )
             (element,) = matches
             return factory(element, element_id, host_uuid)
 
-        # 2. UUID attribute search — the only correct lookup method
+        # 2. Single UUID/FamName search
         matches = self._find_by_uuid(element_id)
         if matches is not None:
             return ElementProxy(matches, element_id=element_id)
 
         raise ValueError(
-            f"Element with UUID {element_id!r} not found in lattice. "
-            f"Check that element.UUID in the AT .m file matches the JSON uuid field."
+            f"Element with UUID/FamName {element_id!r} not found in lattice. "
+            f"Check that the uuid field in the JSON setup matches either "
+            f"element.UUID (SOLEIL) or element.FamName (MAX IV) in the lattice."
         )
 
     @staticmethod
