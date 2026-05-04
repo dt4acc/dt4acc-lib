@@ -54,7 +54,8 @@ def manipulate_kick(
     return kick_angles
 
 def guess_multipole_main_strength_index(element, property_id: str):
-    """Guessing main strength for multipole by finding the coefficient with the largest value at rref
+    """Guessing main strength for multipole by finding the coefficient with the largest value at rref.
+    Falls back to _subtype attribute (set at load time) when PolynomB is all zeros.
 
     TANGO_2ND: AN01-AR/EM-COR/OH.01-CQLN.01 // slow normal
     TANGO_3RD: AN01-AR/EM-COR/OH.01-CQLT.01 //slow turned
@@ -62,6 +63,19 @@ def guess_multipole_main_strength_index(element, property_id: str):
     rref = 10e-3
     mul = np.absolute(element.PolynomB) * rref ** np.arange(len(element.PolynomB))
     idx = mul.argmax()
+    if idx == 0 and np.all(element.PolynomB == 0):
+        # PolynomB is all zeros — use _subtype annotation set at lattice load time
+        subtype = getattr(element, '_subtype', None)
+        if subtype == 'Quad':
+            return 1   # PolynomB[1] = K
+        elif subtype in ('Sext', 'SkewSext'):
+            return 2   # PolynomB[2] = H
+        elif subtype == 'Bend':
+            return 0   # PolynomB[0] = dipole field
+        # Last resort: use MaxOrder - 1
+        max_order = getattr(element, 'MaxOrder', None)
+        if max_order is not None and max_order > 0:
+            return int(max_order) - 1
     return idx
 
 class ElementProxy(ElementInterface):
@@ -207,6 +221,20 @@ class ElementProxy(ElementInterface):
                 raise NotImplementedError(
                     f"Don't know how to set main strength for element {element_type}"
                 )
+        elif method_name == "set_main_strength_k":
+            # Explicit quadrupole component (PolynomB[1] = K) — used by device-view
+            # facilities (e.g. MAX IV) where element class is generic 'Multipole'
+            element.update(K=value)
+        elif method_name == "set_main_strength_h":
+            # Explicit sextupole component (PolynomB[2] = H) — used by device-view
+            # facilities (e.g. MAX IV) where element class is generic 'Multipole'
+            element.update(H=value)
+        elif method_name == "set_main_strength_b0":
+            # Explicit dipole component (PolynomB[0]) — used for bending magnets
+            # in device-view facilities where element class is generic 'Multipole'
+            polynom_b = element.PolynomB.copy()
+            polynom_b[0] = float(value)
+            element.PolynomB = polynom_b
         elif method_name == "set_freq":
             element.update(Frequency=value * 1000)
         elif method_name in ["set_rdbk", "set_K"]:
@@ -231,6 +259,8 @@ class ElementProxy(ElementInterface):
 
         if property_id in ["K", "H", "main_strength"]:
             return self.peek_main_strength(property_id)
+        elif property_id in ["main_strength_k", "main_strength_h", "main_strength_b0"]:
+            return self.peek_main_strength(property_id)
         elif property_id in ["x_kick", "y_kick"]:
             return self.peek_kick(property_id)
         elif property_id in ["frequency"]:
@@ -247,7 +277,14 @@ class ElementProxy(ElementInterface):
     def peek_main_strength(self, property_id: str):
         (element,) = self._obj
         element_type = element.__class__.__name__
-        if element_type == "Quadrupole":
+        # Explicit property names for device-view facilities (e.g. MAX IV)
+        if property_id == "main_strength_k":
+            return float(element.PolynomB[1])
+        elif property_id == "main_strength_h":
+            return float(element.PolynomB[2])
+        elif property_id == "main_strength_b0":
+            return float(element.PolynomB[0])
+        elif element_type == "Quadrupole":
             assert property_id in ["K", "main_strength"]
             return element.K
         elif element_type == "Sextupole":
@@ -260,6 +297,9 @@ class ElementProxy(ElementInterface):
             # Main strength is PolynomB[3] = K3
             assert property_id in ["main_strength"]
             return float(element.PolynomB[3])
+        elif element_type == "Multipole":
+            idx = guess_multipole_main_strength_index(element, property_id)
+            return float(element.PolynomB[idx])
         else:
             raise NotImplementedError(
                 f"main strength not implemented for element {element_type}"
@@ -430,13 +470,17 @@ class SkewQuadCorrectorProxy(AddOnElementProxy):
         element = self._get_element()
 
         if self.corrector_type == "skew":
-            polynom_a = element.PolynomA.copy()
+            # Ensure PolynomA is long enough to hold index 1
+            polynom_a = np.zeros(max(len(element.PolynomA), 2), dtype=float)
+            polynom_a[:len(element.PolynomA)] = element.PolynomA
             polynom_a[1] = float(value)
-            element.PolynomA = polynom_a
+            element.update(PolynomA=polynom_a)
         else:
-            polynom_b = element.PolynomB.copy()
+            # Ensure PolynomB is long enough to hold index 1
+            polynom_b = np.zeros(max(len(element.PolynomB), 2), dtype=float)
+            polynom_b[:len(element.PolynomB)] = element.PolynomB
             polynom_b[1] = float(value)
-            element.PolynomB = polynom_b
+            element.update(PolynomB=polynom_b)
 
         logger.debug(
             "SkewQuadCorrectorProxy.update: %s[%s].%s[1] = %s",

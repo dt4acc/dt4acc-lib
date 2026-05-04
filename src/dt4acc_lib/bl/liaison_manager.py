@@ -11,7 +11,7 @@ from dt4acc_lib.model.utils.liaison_manager_lookup_table import (
     LiaisonManagerForwardLookupTable
 )
 
-logger = logging.getLogger("accml")
+logger = logging.getLogger("dt4acc_lib")
 
 
 class LiaisonManager(LiaisonManagerBase):

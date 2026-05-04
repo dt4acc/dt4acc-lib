@@ -12,7 +12,7 @@ from dt4acc_lib.model.utils.translator_manager_lookup_table import TranslatorLoo
     TuneConversionCoefficients, IdentityMapper
 
 
-logger = logging.getLogger("accml")
+logger = logging.getLogger("dt4acc_lib")
 
 
 class TranslatorService(TranslatorServiceBase):
