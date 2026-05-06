@@ -87,6 +87,9 @@ class ElementProxy(ElementInterface):
         element_id: Identifier for the element.
         on_update_finished: Event triggered upon update completion.
         on_changed_value: Event triggered upon value change.
+
+    Todo:
+        Review if only a single element should be passed to the proxy
     """
 
     def __init__(self, obj, *, element_id: str, name: str = None):
@@ -344,7 +347,7 @@ class KickAngleCorrectorProxy(AddOnElementProxy):
     """
 
     def __init__(self, obj, **kwargs):
-        super().__init__(*obj, **kwargs)
+        super().__init__(obj, **kwargs)
 
     async def update_kick(self, *, kick_x=None, kick_y=None):
         """
