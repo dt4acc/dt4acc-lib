@@ -347,7 +347,7 @@ class KickAngleCorrectorProxy(AddOnElementProxy):
     """
 
     def __init__(self, obj, **kwargs):
-        super().__init__(obj, **kwargs)
+        super().__init__(*obj, **kwargs)
 
     async def update_kick(self, *, kick_x=None, kick_y=None):
         """
