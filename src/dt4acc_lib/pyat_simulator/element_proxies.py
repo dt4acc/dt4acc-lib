@@ -6,7 +6,7 @@ from at import shift_elem
 
 from dt4acc_lib.interfaces.simulator.element import ElementInterface
 
-logger = logging.getLogger("accml")
+logger = logging.getLogger("dt4acc_lib")
 
 
 def estimate_shift(element, eps=1e-8):
@@ -419,8 +419,8 @@ class SkewQuadCorrectorProxy(AddOnElementProxy):
     The mapping from facility nomenclature to corrector_type is done in
     the facility-specific setup (e.g. ADDON_PROXY_REGISTRY in
     liasion_translator_setup.py):
-        SOLEIL CQLN  →  corrector_type="skew"
-        SOLEIL CQLT  →  corrector_type="normal"
+        SOLEIL CQLN  →  corrector_type="normal"  (PolynomB[1], normal quad)
+        SOLEIL CQLT  →  corrector_type="skew"    (PolynomA[1], skew quad)
 
     Parameters
     ----------

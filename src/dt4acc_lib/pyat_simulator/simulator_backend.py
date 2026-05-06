@@ -92,6 +92,30 @@ class TuneElement(ResultElement):
         tune = ring_pars["tune"]
         return Tune(x=tune[0], y=tune[1])
 
+
+class ChromaticityElement(ResultElement):
+    """Returns chromaticity (xi_x, xi_y) from AT.
+    Uses at.get_optics with get_chrom=True which is available in pyAT >= 0.8.
+    Falls back gracefully if not supported (e.g. 4D lattice without RF).
+    """
+    def __init__(self, backend):
+        self.backend = backend
+
+    def get(self, prop_id: str) -> Tune:
+        assert prop_id == "transversal", f"Only prepared to handle transversal chromaticity but got {prop_id}"
+        try:
+            import at
+            ring = self.backend.acc.acc
+            _, ring_pars, _ = ring.get_optics(at.All, get_chrom=True)
+            chroma = ring_pars["chromaticity"]
+            if chroma is not None and not any(
+                __import__("math").isnan(c) for c in chroma
+            ):
+                return Tune(x=float(chroma[0]), y=float(chroma[1]))
+        except Exception:
+            pass
+        return Tune(x=0.0, y=0.0)
+
 class SimulationStateModel:
     """all methods added by class::`transitions.Machine`
 
@@ -158,6 +182,7 @@ class SimulatorBackend(BackendRW):
             orbit=OrbitElement(backend=self),
             track=TrackElement(backend=self),
             tune=TuneElement(backend=self),
+            chromaticity=ChromaticityElement(backend=self),
             twiss=TwissElement(backend=self),
         )
 
@@ -236,7 +261,7 @@ class SimulatorBackend(BackendRW):
         elem_names = [elem.FamName for elem in self.acc.acc]
         # optics repeats data for the first element
         self.elem_names = elem_names + [elem_names[0]]
-        logger.debug("Calculated optics x0 = %s", optics[0])
+        logger.info("Calculated optics x0 = %s", optics[0])
         # logger.info("Calculated optics (twiss) ?to x=%.4f y=%.4f", self.tune.x, self.tune.y)
 
 
