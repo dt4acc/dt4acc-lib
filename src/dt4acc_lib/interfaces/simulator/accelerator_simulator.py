@@ -23,3 +23,9 @@ class AcceleratorSimulatorInterface(metaclass=ABCMeta):
         Review if derived classes use async implementations
         """
         pass
+
+    @abstractmethod
+    def get_optics_parameters(self):
+        """
+        Todo: fix return type
+        """
