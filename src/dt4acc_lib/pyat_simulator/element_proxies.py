@@ -1,57 +1,12 @@
 import logging
-from typing import Tuple
 
 import numpy as np
-from at import shift_elem
 
 from dt4acc_lib.interfaces.simulator.element import ElementInterface
+from dt4acc_lib.pyat_simulator.properties.utils import manipulate_kick, update_shift
 
 logger = logging.getLogger("dt4acc_lib")
 
-
-def estimate_shift(element, eps=1e-8):
-    """
-    Todo: get it upstreamed into pyat
-    todo: currently this is very pyat specific element update
-    Estimate the shift values for an element.
-
-    Args:
-        element: The element to estimate shift for.
-        eps: Tolerance value for consistency check.
-
-    Returns:
-        np.ndarray: Computed shift values.
-
-    Raises:
-        AssertionError: If standard deviation exceeds the tolerance.
-    """
-    try:
-        down_stream_shift = element.T1
-    except AttributeError:
-        down_stream_shift = np.zeros([6], float)
-    try:
-        up_stream_shift = element.T2
-    except AttributeError:
-        up_stream_shift = np.zeros([6], float)
-
-    prep = np.array([down_stream_shift, -up_stream_shift])
-    shift = prep.mean(axis=0)
-
-    # shifts can be applied to more than one element, these are now
-    # expected to have all the same shift.
-    assert (np.absolute(prep.std(axis=0)) < eps).all()
-    return shift
-
-
-def manipulate_kick(
-    kick_angles: Tuple[float, float], kick_x=None, kick_y=None
-) -> Tuple[float, float]:
-    kick_angles = kick_angles.copy()
-    if kick_x is not None:
-        kick_angles[0] = kick_x
-    if kick_y is not None:
-        kick_angles[1] = kick_y
-    return kick_angles
 
 def guess_multipole_main_strength_index(element, property_id: str):
     """Guessing main strength for multipole by finding the coefficient with the largest value at rref.
@@ -77,6 +32,7 @@ def guess_multipole_main_strength_index(element, property_id: str):
         if max_order is not None and max_order > 0:
             return int(max_order) - 1
     return idx
+
 
 class ElementProxy(ElementInterface):
     """
@@ -123,21 +79,8 @@ class ElementProxy(ElementInterface):
         Raises:
             AssertionError: If both dx and dy are None.
         """
-        assert dx is not None or dy is not None, "Either dx or dy must be provided"
-
         (element,) = self._obj
-        shift = estimate_shift(element)
-
-        dx = dx if dx is not None else shift[0]
-        dy = dy if dy is not None else shift[1]
-
-        # call AT shift element
-        shift_elem(element, dx, dy)
-
-        # look what really happened
-        (element,) = self._obj
-        dxr, _, dyr, _, _, _ = estimate_shift(element)
-        pass
+        return update_shift(element, dx, dy)
 
     async def _delta_update(self, property_id: str, value: object):
         """
@@ -239,6 +182,7 @@ class ElementProxy(ElementInterface):
             polynom_b[0] = float(value)
             element.PolynomB = polynom_b
         elif method_name == "set_freq":
+            # Todo: the frequency scale here must go!
             element.update(Frequency=value * 1000)
         elif method_name in ["set_rdbk", "set_K"]:
             pass
