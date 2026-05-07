@@ -18,7 +18,7 @@ class KickX(ElementPropertyInterface):
 
 class KickY(ElementPropertyInterface):
     def __repr__(self):
-        return f"{self.__class__.__name__}(obj={self.obj})"
+        return f"{self.__class__.__name__}()"
 
     def handles_property(self) -> str:
         return "kick_y"

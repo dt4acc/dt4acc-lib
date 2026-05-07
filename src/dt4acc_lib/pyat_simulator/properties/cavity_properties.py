@@ -12,7 +12,7 @@ class Frequency(ElementPropertyInterface):
         obj.update(Frequency=value)
 
     def peek(self, obj) -> float:
-        return float(self.obj.Frequency)
+        return float(obj.Frequency)
 
 
 class Voltage(ElementPropertyInterface):

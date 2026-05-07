@@ -11,8 +11,8 @@ class NormalSkew(Enum):
         check where this is already defined and reuse it
     """
 
-    normal: "normal"
-    skew: "skew"
+    normal= "normal"
+    skew="skew"
 
 
 class Multipole(ElementPropertyInterface):
@@ -35,9 +35,9 @@ class Multipole(ElementPropertyInterface):
 
     def handles_property(self) -> str:
         if self.normal_skew.value == "normal":
-            return "B{self.n_multipole:d}"
+            return f"B{self.n_multipole:d}"
         elif self.normal_skew.value == "skew":
-            return "A{self.n_multipole:d}"
+            return f"A{self.n_multipole:d}"
         else:
             raise AssertionError("Should not end up here!")
 

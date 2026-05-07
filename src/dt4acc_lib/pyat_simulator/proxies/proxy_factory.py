@@ -7,7 +7,7 @@ from ..properties.cavity_properties import Frequency, Voltage
 from ..properties.geometric_properties import Dx, Dy, Roll
 from ..properties.interface import ElementPropertyInterface
 from ..properties.kick import KickX, KickY
-from ..properties.main_strength import MainStrengthForQuadrupole
+from ..properties.main_strength import MainStrengthForQuadrupole, MainStrengthForSextupole
 from ..properties.multipole import Multipole, NormalSkew
 from ...interfaces.simulator.element import ElementInterface
 
@@ -37,7 +37,7 @@ class ElementProxyFactory:
         """
         prop_lut = self.elem_props_lut[obj.__class__.__name__]
         r = PropertiesProxy(
-            obj, properties_lut=prop_lut, element_id=element_id, mame=name
+            obj, properties_lut=prop_lut, element_id=element_id, name=name
         )
         return r
 
@@ -49,6 +49,11 @@ def create_at_properties_lut_per_element_cls() -> Dict[
     precompute them as it will often be needed to instantiate them
     """
     lut = at_element_properties_lut()
+
+    # All further processing is based on that the properties are unique
+    for cls_name, props in lut.items():
+        names = [p.handles_property() for p in props]
+        assert len(names) == len(set(names)), f"{cls_name}: property names {names} are not unique"
     r = {
         cls_name: {p.handles_property(): p for p in props}
         for cls_name, props in lut.items()
@@ -68,9 +73,10 @@ def at_element_properties_lut() -> Dict[str, Sequence[ElementPropertyInterface]]
         for n_mul in range(2, 20)
     ]
     all_magnets_properties = multipoles + [KickX(), KickY()] + geometric_properties
-    return {
+    r = {
         at.Quadrupole.__name__: [MainStrengthForQuadrupole()] + all_magnets_properties,
-        at.Sextupole.__name__: [MainStrengthForQuadrupole()] + all_magnets_properties,
+        at.Sextupole.__name__: [MainStrengthForSextupole()] + all_magnets_properties,
         at.Multipole.__name__: all_magnets_properties,
-        at.RFCavity.__name__: [Frequency, Voltage] + geometric_properties,
+        at.RFCavity.__name__: [Frequency(), Voltage()] + geometric_properties,
     }
+    return r
