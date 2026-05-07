@@ -6,6 +6,7 @@ from ...interfaces.simulator.element import ElementInterface
 
 logger = logging.getLogger("dt4acc-lib")
 
+
 class PropertiesProxy(ElementInterface):
     def __init__(
         self,
@@ -57,11 +58,19 @@ class PropertiesProxy(ElementInterface):
         return r
 
     async def update(self, property_id: str, value: object):
-        assert property_id.startswith(
-            "set_"
-        ), f"Expected property starts with 'set_' but property_id was  {property_id}"
-        p = property_id[4:]
-        pp = self.get_property_proxy(p)
+        if property_id.startswith("set_"):
+            property_id = property_id[4:]
+        else:
+            self.log.warning(
+                f"{self.__class__.__name__}("
+                "name={self.name},"
+                ")"
+                f" updating object {self.obj} with {property_id} which does not start with set_"
+            )
+        # assert property_id.startswith(
+        #     "set_"
+        # ), f"Expected property starts with 'set_' but property_id was  {property_id}"
+        pp = self.get_property_proxy(property_id)
         await pp.update(self.obj, value)
 
     def peek(self, property_id: str) -> object:
