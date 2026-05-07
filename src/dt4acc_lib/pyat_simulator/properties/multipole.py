@@ -16,6 +16,12 @@ class NormalSkew(Enum):
 
 
 class Multipole(ElementPropertyInterface):
+    """
+    Revisit name
+
+    Coefficient indexing follows currently the European Convention
+    Thus: dipole = 1, ....
+    """
     def __init__(self, normal_skew: NormalSkew, n_multipole: int):
         """
         Todo:
@@ -50,8 +56,13 @@ class Multipole(ElementPropertyInterface):
             raise AssertionError("Should not end up here!")
 
     def peek(self, obj) -> float:
+        """
+        Todo:
+            what to return if the polynom is not available?
+            Could return 0 as the underlying code does the same
+            calculation most probably
+        """
         if self.normal_skew.value == "normal":
-
             return float(obj.PolynomB[self.n_multipole - 1])
         elif self.normal_skew.value == "skew":
             return float(obj.PolynomA[self.n_multipole - 1])
