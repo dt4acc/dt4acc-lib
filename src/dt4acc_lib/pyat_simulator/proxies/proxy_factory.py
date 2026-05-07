@@ -6,7 +6,7 @@ from .properties_proxy import PropertiesProxy
 from ..properties.cavity_properties import Frequency, Voltage
 from ..properties.geometric_properties import Dx, Dy, Roll
 from ..properties.interface import ElementPropertyInterface
-from ..properties.kick import KickX, KickY
+from ..properties.kick import XKick, YKick
 from ..properties.main_strength import MainStrengthForQuadrupole, MainStrengthForSextupole
 from ..properties.multipole import Multipole, NormalSkew
 from ...interfaces.simulator.element import ElementInterface
@@ -72,7 +72,7 @@ def at_element_properties_lut() -> Dict[str, Sequence[ElementPropertyInterface]]
         Multipole(normal_skew=NormalSkew.skew, n_multipole=n_mul)
         for n_mul in range(2, 20)
     ]
-    all_magnets_properties = multipoles + [KickX(), KickY()] + geometric_properties
+    all_magnets_properties = multipoles + [XKick(), YKick()] + geometric_properties
     r = {
         at.Quadrupole.__name__: [MainStrengthForQuadrupole()] + all_magnets_properties,
         at.Sextupole.__name__: [MainStrengthForSextupole()] + all_magnets_properties,

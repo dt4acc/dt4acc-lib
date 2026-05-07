@@ -2,29 +2,29 @@ from .interface import ElementPropertyInterface
 from .utils import manipulate_kick, peek_kick
 
 
-class KickX(ElementPropertyInterface):
+class XKick(ElementPropertyInterface):
     def __repr__(self):
         return f"{self.__class__.__name__}()"
 
     def handles_property(self) -> str:
-        return "kick_x"
+        return "x_kick"
 
     async def update(self, obj, value: float):
         obj.update(KickAngle=manipulate_kick(obj.KickAngle, kick_x=value))
 
     def peek(self, obj) -> float:
-        return peek_kick(obj, "kick_x")
+        return peek_kick(obj, "x_kick")
 
 
-class KickY(ElementPropertyInterface):
+class YKick(ElementPropertyInterface):
     def __repr__(self):
         return f"{self.__class__.__name__}()"
 
     def handles_property(self) -> str:
-        return "kick_y"
+        return "y_kick"
 
     async def update(self, obj, value: float):
         obj.update(KickAngle=manipulate_kick(obj.KickAngle, kick_y=value))
 
     def peek(self, obj) -> float:
-        return peek_kick(obj, "kick_y")
+        return peek_kick(obj, "y_kick")
