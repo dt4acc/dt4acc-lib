@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Sequence, Dict
 
 from ..properties.interface import ElementPropertyInterface
 from ...interfaces.simulator.element import ElementInterface
@@ -7,12 +7,13 @@ from ...interfaces.simulator.element import ElementInterface
 class PropertiesProxy(ElementInterface):
     def __init__(
         self,
-        properties: Sequence[ElementPropertyInterface],
+        obj,
+        properties_lut: Dict[str, ElementPropertyInterface],
         element_id: str,
         name: str = None,
     ):
-        self.properties = properties
-        self.lut = {p.handles_property(): p for p in properties}
+        self.obj = obj
+        self.lut = properties_lut
         self.element_id = element_id
         self.name = name
 
@@ -20,7 +21,8 @@ class PropertiesProxy(ElementInterface):
         return (
             f"{self.__class__.__name__}("
             f"name={self.get_name()},"
-            f" handles properties= {[p.handles_property() for p in self.properties]}"
+            f" obj={self.obj},"
+            f" properties={list(self.lut)}"
             ")"
         )
 
@@ -28,7 +30,8 @@ class PropertiesProxy(ElementInterface):
         return (
             f"{self.__class__.__name__}("
             f"name={self.get_name()},"
-            f" properties = {self.properties}"
+            f" obj={repr(self.obj)},"
+            f" properties={self.lut}"
             ")"
         )
 
@@ -42,11 +45,11 @@ class PropertiesProxy(ElementInterface):
             "set_"
         ), f"Expected property starts with 'set_' but property_id was  {property_id}"
         p = property_id[4:]
-        await self.lut[p].update(value)
+        await self.lut[p].update(self.obj, value)
 
     def peek(self, property_id: str) -> object:
         assert property_id.startswith(
             "get_"
         ), f"Expected property starts with 'set_' but property_id was  {property_id}"
         p = property_id[4:]
-        return self.lut[p].peek()
+        return self.lut[p].peek(self.obj)

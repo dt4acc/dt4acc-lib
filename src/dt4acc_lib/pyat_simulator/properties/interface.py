@@ -18,7 +18,7 @@ class ElementPropertyInterface(metaclass=ABCMeta):
         raise NotImplementedError("use derived class instead")
 
     @abstractmethod
-    async def update(self, value: object):
+    async def update(self, obj, value: object):
         """Updates value
 
         Todo: need to narrow type description down
@@ -26,7 +26,7 @@ class ElementPropertyInterface(metaclass=ABCMeta):
         raise NotImplementedError("use derived class instead")
 
     @abstractmethod
-    def peek(self) -> object:
+    def peek(self, obj) -> object:
         """returns value
 
         Todo: need to narrow type description down
