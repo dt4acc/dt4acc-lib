@@ -1,4 +1,4 @@
-from dt4acc_lib.pyat_simulator.properties.interface import ElementPropertyInterface
+from dt4acc_lib.pyat_simulator.element_properties.element_property_interface import ElementPropertyInterface
 
 
 class Frequency(ElementPropertyInterface):

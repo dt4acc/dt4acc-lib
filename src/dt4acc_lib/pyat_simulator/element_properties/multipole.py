@@ -1,6 +1,6 @@
 from enum import Enum
 
-from .interface import ElementPropertyInterface
+from .element_property_interface import ElementPropertyInterface
 from .utils import check_multipole_index, update_magnetic_polynom
 
 

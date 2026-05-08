@@ -3,12 +3,12 @@ from typing import Dict, Sequence
 import at
 
 from .properties_proxy import PropertiesProxy
-from ..properties.cavity_properties import Frequency, Voltage
-from ..properties.geometric_properties import Dx, Dy, Roll
-from ..properties.interface import ElementPropertyInterface
-from ..properties.kick import XKick, YKick
-from ..properties.main_strength import MainStrengthForQuadrupole, MainStrengthForSextupole
-from ..properties.multipole import Multipole, NormalSkew
+from ..element_properties.cavity_properties import Frequency, Voltage
+from ..element_properties.geometric_properties import Dx, Dy, Roll
+from ..element_properties.element_property_interface import ElementPropertyInterface
+from ..element_properties.kick import XKick, YKick
+from ..element_properties.main_strength import MainStrengthForQuadrupole, MainStrengthForSextupole
+from ..element_properties.multipole import Multipole, NormalSkew
 from ...interfaces.simulator.element import ElementInterface
 
 

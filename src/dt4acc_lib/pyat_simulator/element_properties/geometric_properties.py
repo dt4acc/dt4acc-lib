@@ -1,4 +1,4 @@
-from .interface import ElementPropertyInterface
+from .element_property_interface import ElementPropertyInterface
 from .utils import estimate_shift, update_shift
 
 

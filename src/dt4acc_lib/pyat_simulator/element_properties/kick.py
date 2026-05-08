@@ -7,7 +7,7 @@ Todo:
     Fail or go ahead
 
 """
-from .interface import ElementPropertyInterface
+from .element_property_interface import ElementPropertyInterface
 from .utils import manipulate_kick, peek_kick
 
 

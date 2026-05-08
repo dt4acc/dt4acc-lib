@@ -1,7 +1,7 @@
 import logging
 from typing import Sequence, Dict
 
-from ..properties.interface import ElementPropertyInterface
+from ..element_properties.element_property_interface import ElementPropertyInterface
 from ...interfaces.simulator.element import ElementInterface
 
 logger = logging.getLogger("dt4acc-lib")

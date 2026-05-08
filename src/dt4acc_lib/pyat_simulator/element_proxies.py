@@ -3,7 +3,7 @@ import logging
 import numpy as np
 
 from dt4acc_lib.interfaces.simulator.element import ElementInterface
-from dt4acc_lib.pyat_simulator.properties.utils import manipulate_kick, update_shift
+from dt4acc_lib.pyat_simulator.element_properties.utils import manipulate_kick, update_shift
 
 logger = logging.getLogger("dt4acc_lib")
 

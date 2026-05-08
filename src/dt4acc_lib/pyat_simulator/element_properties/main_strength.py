@@ -7,7 +7,7 @@ Todo:
 """
 import numpy as np
 
-from .interface import ElementPropertyInterface
+from .element_property_interface import ElementPropertyInterface
 
 
 class MainStrengthForQuadrupole(ElementPropertyInterface):
