@@ -32,3 +32,6 @@ class ElementPropertyInterface(metaclass=ABCMeta):
         Todo: need to narrow type description down
         """
         raise NotImplementedError("use derived class instead")
+
+
+__all__ = ["ElementPropertyInterface"]

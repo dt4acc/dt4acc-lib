@@ -80,3 +80,6 @@ def at_element_properties_lut() -> Dict[str, Sequence[ElementPropertyInterface]]
         at.RFCavity.__name__: [Frequency(), Voltage()] + geometric_properties,
     }
     return r
+
+
+__all__ = ["ElementProxyFactory"]

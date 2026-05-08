@@ -11,8 +11,8 @@ class NormalSkew(Enum):
         check where this is already defined and reuse it
     """
 
-    normal= "normal"
-    skew="skew"
+    normal = "normal"
+    skew = "skew"
 
 
 class Multipole(ElementPropertyInterface):
@@ -22,6 +22,7 @@ class Multipole(ElementPropertyInterface):
     Coefficient indexing follows currently the European Convention
     Thus: dipole = 1, ....
     """
+
     def __init__(self, normal_skew: NormalSkew, n_multipole: int):
         """
         Todo:
@@ -68,3 +69,6 @@ class Multipole(ElementPropertyInterface):
             return float(obj.PolynomA[self.n_multipole - 1])
         else:
             raise AssertionError("Should not end up here!")
+
+
+__all__ = ["Multipole", "NormalSkew"]

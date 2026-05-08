@@ -2,7 +2,7 @@
 Todo:
     consider if main strength for octopule should be provided.
     As the octupole is provided as multipole the liasion manager
-    should map to "B4" instead of anysthing else
+    should map to "B4" directly
 
 """
 import numpy as np

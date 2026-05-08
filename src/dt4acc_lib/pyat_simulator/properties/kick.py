@@ -28,3 +28,6 @@ class YKick(ElementPropertyInterface):
 
     def peek(self, obj) -> float:
         return peek_kick(obj, "y_kick")
+
+
+__all__ = ["XKick", "YKick"]

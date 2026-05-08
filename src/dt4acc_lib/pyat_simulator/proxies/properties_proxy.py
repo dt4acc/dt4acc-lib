@@ -8,6 +8,8 @@ logger = logging.getLogger("dt4acc-lib")
 
 
 class PropertiesProxy(ElementInterface):
+    """Delegates modification of an element property to a dedicated handler
+    """
     def __init__(
         self,
         obj,
@@ -80,3 +82,6 @@ class PropertiesProxy(ElementInterface):
         p = property_id
         pp = self.get_property_proxy(p)
         return pp.peek(self.obj)
+
+
+__all__ = ["PropertiesProxy"]
