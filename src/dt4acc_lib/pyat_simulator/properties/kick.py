@@ -1,3 +1,12 @@
+"""
+Todo:
+    The underlying object (e.g. a Quadrupole) does not
+    need to have a KickAngle attribute
+
+    What would be the appropriate treatment then?
+    Fail or go ahead
+
+"""
 from .interface import ElementPropertyInterface
 from .utils import manipulate_kick, peek_kick
 
