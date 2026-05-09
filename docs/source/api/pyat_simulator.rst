@@ -54,10 +54,11 @@ Geometric properties
 
 Changing multipole components
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-.. automodule:: dt4acc_lib.pyat_simulator.element_properties.multipoles
+.. automodule:: dt4acc_lib.pyat_simulator.element_properties.multipole
    :members:
    :undoc-members:
    :show-inheritance:
+
 
 Changing main strength of a magnet
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

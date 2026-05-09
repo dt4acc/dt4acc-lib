@@ -42,7 +42,14 @@ Repository = "https://github.com/dt4acc/dt4acc-lib.git"
 
 [project.optional-dependencies]
 docs = [
-  "Sphinx==4.2.0",
-  "sphinx-rtd-theme==1.0.0",
-  "sphinxcontrib-napoleon==0.7",
+  "Sphinx<10",
+  "sphinx-rtd-theme",
+  "sphinxcontrib-napoleon",
+  "furo",
+  "myst-parser",
+  "sphinx-autodoc-typehints>=2.0",
+  "sphinx-copybutton",
+  "sphinx-design",
+  "sphinxcontrib-bibtex",
+  "numpydoc",
 ]
