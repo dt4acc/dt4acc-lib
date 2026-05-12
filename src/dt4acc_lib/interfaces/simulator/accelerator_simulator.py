@@ -29,3 +29,11 @@ class AcceleratorSimulatorInterface(metaclass=ABCMeta):
         """
         Todo: fix return type
         """
+
+    @abstractmethod
+    def reinit(self):
+        """Reinitialise simulator from lattice
+
+        Todo:
+            better reset?
+        """
