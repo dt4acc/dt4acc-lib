@@ -26,6 +26,11 @@ class ReadCommand:
 
 @dataclass
 class Command:
+    """
+
+    Todo:
+        consider to make it a subclass of ReadCommand
+    """
     #: can be the identifier of a lattice element or a device
     id: str
     property: str
