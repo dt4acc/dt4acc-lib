@@ -5,6 +5,11 @@ from dt4acc_lib.interfaces.utils.yellow_pages import YellowPagesBase
 
 
 class FamilyName(Enum):
+    """
+
+    Todo:
+        move to model or interface
+    """
     quadrupoles = "quadrupoles"
     tune_correction_quadrupoles = "tune_correction_quadrupoles"
     master_clock = "master_clock"

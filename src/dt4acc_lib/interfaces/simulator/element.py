@@ -2,6 +2,11 @@ from abc import abstractmethod, ABCMeta
 
 
 class AlignmentInterface(metaclass=ABCMeta):
+    """
+    Todo:
+        consider to remove. This functionality is superseded by
+        the property changers
+    """
     @abstractmethod
     def get_x(self):
         pass
@@ -58,6 +63,8 @@ class ElementInterface(metaclass=ABCMeta):
 class MagneticElementInterface(ElementInterface):
     """
     Todo:
+        This functionality is superseded by the element interface
+
         alignment is not part of elementinterface by design
         it should be part of magnet
     """

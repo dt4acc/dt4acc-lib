@@ -6,6 +6,11 @@ from .conv import deserialse_value, serialize_value
 
 
 class BehaviourOnError(IntEnum):
+    """
+    Todo: use a standard enum, int enums are a bit special
+
+    See reasons given in the book "Robust Python"
+    """
     stop = 1
     ignore = 2
     roll_back = 3
