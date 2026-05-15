@@ -2,7 +2,7 @@ from typing import Tuple, Sequence, Dict
 
 import numpy as np
 import at
-from scipy.constants import speed_of_light
+from scipy.constants import speed_of_light, elementary_charge
 
 
 def estimate_shift(element, eps=1e-8):
@@ -119,6 +119,11 @@ def estimate_dipole_main_field(
 ):
     """dipole main field derived from energy
 
+    Args:
+        beam_energy: in electron volts
+        dipole_angle: in radians
+        path_length: in meters
+
     Warning: only valid for electrons
 
     .. math::
@@ -129,7 +134,7 @@ def estimate_dipole_main_field(
     """
     electron_rest_energy = 511e3
     ratio = dipole_angle /  (speed_of_light * path_length)
-    E = np.sqrt(beam_energy - electron_rest_energy)
+    E = np.sqrt(beam_energy**2 - electron_rest_energy**2)
     r  = ratio * E
     return r
 

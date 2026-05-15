@@ -47,15 +47,26 @@ class MainStrengthForSextupole(ElementPropertyInterface):
 
 
 class MainStrengthForDipole(ElementPropertyInterface):
+    def __repr__(self):
+        return f"{self.__class__.__name__}()"
+
+    def handles_property(self) -> str:
+        return "main_strength"
+
     async def update(self, obj, value: object):
         raise NotImplementedError("Main strength for dipole not handled")
 
     def peek(self, obj) -> object:
-        return estimate_dipole_main_field(
-            beam_energy=obj.beam_energy, dipole_angle=obj.angle, path_length=obj.Length
+        # the beam energy is not necessarily part of the dipole object
+        # todo: add appropriate logging or error messages
+        beam_energy = obj.Energy
+        r = estimate_dipole_main_field(
+            beam_energy=beam_energy,
+            dipole_angle=obj.BendingAngle,
+            path_length=obj.Length,
         )
+        return r
 
-    def handles_property(self) -> str:
-        return "main_strength"
+
 
 __all__ = ["MainStrengthForQuadrupole", "MainStrengthForSextupole"]

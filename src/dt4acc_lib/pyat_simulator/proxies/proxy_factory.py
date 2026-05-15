@@ -7,8 +7,11 @@ from ..element_properties.cavity_properties import Frequency, Voltage
 from ..element_properties.geometric_properties import Dx, Dy, Roll
 from ..element_properties.element_property_interface import ElementPropertyInterface
 from ..element_properties.kick import XKick, YKick
-from ..element_properties.main_strength import MainStrengthForQuadrupole, MainStrengthForSextupole, \
-    MainStrengthForDipole
+from ..element_properties.main_strength import (
+    MainStrengthForQuadrupole,
+    MainStrengthForSextupole,
+    MainStrengthForDipole,
+)
 from ..element_properties.multipole import Multipole, NormalSkew
 from ...interfaces.simulator.element import ElementInterface
 
@@ -54,7 +57,9 @@ def create_at_properties_lut_per_element_cls() -> Dict[
     # All further processing is based on that the properties are unique
     for cls_name, props in lut.items():
         names = [p.handles_property() for p in props]
-        assert len(names) == len(set(names)), f"{cls_name}: property names {names} are not unique"
+        assert len(names) == len(
+            set(names)
+        ), f"{cls_name}: property names {names} are not unique"
     r = {
         cls_name: {p.handles_property(): p for p in props}
         for cls_name, props in lut.items()
@@ -75,7 +80,7 @@ def at_element_properties_lut() -> Dict[str, Sequence[ElementPropertyInterface]]
     ]
     all_magnets_properties = multipoles + [XKick(), YKick()] + geometric_properties
     r = {
-        at.Dipole.__name__ : [MainStrengthForDipole] + all_magnets_properties,
+        at.Dipole.__name__: [MainStrengthForDipole()] + all_magnets_properties,
         at.Quadrupole.__name__: [MainStrengthForQuadrupole()] + all_magnets_properties,
         at.Sextupole.__name__: [MainStrengthForSextupole()] + all_magnets_properties,
         at.Multipole.__name__: all_magnets_properties,
