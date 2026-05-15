@@ -2,6 +2,7 @@ from typing import Tuple, Sequence, Dict
 
 import numpy as np
 import at
+from scipy.constants import speed_of_light
 
 
 def estimate_shift(element, eps=1e-8):
@@ -109,6 +110,28 @@ def update_magnetic_polynom(
     for idx, coeff in coeffs.items():
         polynom[idx - 1] = coeff
     return polynom
+
+
+def estimate_dipole_main_field(
+        beam_energy: float,
+        dipole_angle: float,
+        path_length: float
+):
+    """dipole main field derived from energy
+
+    Warning: only valid for electrons
+
+    .. math::
+
+        B = \\frac{\\theta}{ecL}\\sqrt{E^2 - m_e^2}
+
+    Where did irho from Tracy go?
+    """
+    electron_rest_energy = 511e3
+    ratio = dipole_angle /  (speed_of_light * path_length)
+    E = np.sqrt(beam_energy - electron_rest_energy)
+    r  = ratio * E
+    return r
 
 
 __all__ = [

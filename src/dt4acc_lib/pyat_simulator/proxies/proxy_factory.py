@@ -7,7 +7,8 @@ from ..element_properties.cavity_properties import Frequency, Voltage
 from ..element_properties.geometric_properties import Dx, Dy, Roll
 from ..element_properties.element_property_interface import ElementPropertyInterface
 from ..element_properties.kick import XKick, YKick
-from ..element_properties.main_strength import MainStrengthForQuadrupole, MainStrengthForSextupole
+from ..element_properties.main_strength import MainStrengthForQuadrupole, MainStrengthForSextupole, \
+    MainStrengthForDipole
 from ..element_properties.multipole import Multipole, NormalSkew
 from ...interfaces.simulator.element import ElementInterface
 
@@ -74,6 +75,7 @@ def at_element_properties_lut() -> Dict[str, Sequence[ElementPropertyInterface]]
     ]
     all_magnets_properties = multipoles + [XKick(), YKick()] + geometric_properties
     r = {
+        at.Dipole.__name__ : [MainStrengthForDipole] + all_magnets_properties,
         at.Quadrupole.__name__: [MainStrengthForQuadrupole()] + all_magnets_properties,
         at.Sextupole.__name__: [MainStrengthForSextupole()] + all_magnets_properties,
         at.Multipole.__name__: all_magnets_properties,
