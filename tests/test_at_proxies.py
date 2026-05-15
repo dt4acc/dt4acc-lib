@@ -1,6 +1,12 @@
+import math
+
 import at
 import pytest
+from scipy.constants import speed_of_light
 
+from dt4acc_lib.pyat_simulator.element_properties.utils import (
+    estimate_dipole_main_field,
+)
 from dt4acc_lib.pyat_simulator.proxies.proxy_factory import (
     create_at_properties_lut_per_element_cls,
     ElementProxyFactory,
@@ -69,15 +75,14 @@ async def test_sextupole_update():
 
     # reenable it after attribute convention has been revisted
     # with pytest.raises(AssertionError):
-    await proxy.update("main_strength", H/3)
+    await proxy.update("main_strength", H / 3)
 
-    await proxy.update("set_main_strength", H/3)
+    await proxy.update("set_main_strength", H / 3)
 
     val = proxy.peek("B3")
-    assert val == pytest.approx(H/3, abs=1e-12, rel=1e-12)
+    assert val == pytest.approx(H / 3, abs=1e-12, rel=1e-12)
     val = proxy.peek("main_strength")
-    assert val == pytest.approx(H/3, abs=1e-12, rel=1e-12)
-
+    assert val == pytest.approx(H / 3, abs=1e-12, rel=1e-12)
 
 
 @pytest.mark.asyncio
@@ -99,14 +104,14 @@ async def test_quadrupole_update():
 
     # reenable test when attribute definition is revisited
     # with pytest.raises(AssertionError):
-    await proxy.update("main_strength", K/4)
+    await proxy.update("main_strength", K / 4)
 
-    await proxy.update("set_main_strength", K/4)
+    await proxy.update("set_main_strength", K / 4)
 
     val = proxy.peek("B2")
-    assert val == pytest.approx(K/4, abs=1e-12, rel=1e-12)
+    assert val == pytest.approx(K / 4, abs=1e-12, rel=1e-12)
     val = proxy.peek("main_strength")
-    assert val == pytest.approx(K/4, abs=1e-12, rel=1e-12)
+    assert val == pytest.approx(K / 4, abs=1e-12, rel=1e-12)
 
 
 @pytest.mark.asyncio
@@ -117,7 +122,7 @@ async def test_kick_update():
 
     """
     dx = 3.13e-4
-    q = at.Quadrupole("quad_kick", 0.42,27.2, KickAngle=[0,0])
+    q = at.Quadrupole("quad_kick", 0.42, 27.2, KickAngle=[0, 0])
     proxy_factory = ElementProxyFactory()
     proxy = proxy_factory.get_proxy(q, element_id="quad_kick")
 
@@ -127,3 +132,31 @@ async def test_kick_update():
     await proxy.update("x_kick", dx)
     val = proxy.peek("x_kick")
     assert val == pytest.approx(dx, abs=1e-12, rel=1e-12)
+
+
+def test_dipole_field_from_electron_beam_energy():
+    radius = 1.0
+    angle = 2 * math.pi * (1 / 32)
+    energy = 1e9  # in EV
+    r = estimate_dipole_main_field(
+        beam_energy=1e9, dipole_angle=angle, path_length=radius * angle
+    )
+    ref = energy / (speed_of_light * radius)
+    assert r == pytest.approx(ref, abs=1e-6, rel=1e-6)
+
+
+@pytest.mark.asyncio
+async def test_dipole_update():
+    """Check it for BESSY II parameters
+
+    todo:
+        update it for a correct check
+    """
+    dip = at.Dipole("test_dipole", length=1.0, bending_angle=math.pi / 16.0)
+    lat = at.Lattice([dip], energy=1.72e9)
+    # necessary so that the energy is stored in the dipole
+    lat.enable_6d()
+    proxy_factory = ElementProxyFactory()
+    proxy = proxy_factory.get_proxy(dip, element_id="test_dipole")
+    main_field = proxy.peek("main_strength")
+    assert main_field == pytest.approx(1.2, abs=0.1, rel=0)

@@ -1,5 +1,5 @@
 import logging
-from typing import Sequence, Dict
+from typing import Dict
 
 from ..element_properties.element_property_interface import ElementPropertyInterface
 from ...interfaces.simulator.element import ElementInterface
@@ -8,15 +8,15 @@ logger = logging.getLogger("dt4acc-lib")
 
 
 class PropertiesProxy(ElementInterface):
-    """Delegates modification of an element property to a dedicated handler
-    """
+    """Delegates modification of an element property to a dedicated handler"""
+
     def __init__(
         self,
         obj,
         properties_lut: Dict[str, ElementPropertyInterface],
         element_id: str,
         name: str = None,
-        log = logger
+        log=logger,
     ):
         self.obj = obj
         self.lut = properties_lut
@@ -78,7 +78,7 @@ class PropertiesProxy(ElementInterface):
     def peek(self, property_id: str) -> object:
         # assert property_id.startswith(
         #     "get_"
-        #), f"Expected property starts with 'get_' but property_id was  {property_id}"
+        # ), f"Expected property starts with 'get_' but property_id was  {property_id}"
         p = property_id
         pp = self.get_property_proxy(p)
         return pp.peek(self.obj)

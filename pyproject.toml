@@ -53,3 +53,7 @@ docs = [
   "sphinxcontrib-bibtex",
   "numpydoc",
 ]
+
+test = [
+  "pytest-asyncio"
+]

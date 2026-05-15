@@ -8,6 +8,7 @@ Todo:
 import numpy as np
 
 from .element_property_interface import ElementPropertyInterface
+from .utils import estimate_dipole_main_field
 
 
 class MainStrengthForQuadrupole(ElementPropertyInterface):
@@ -43,6 +44,29 @@ class MainStrengthForSextupole(ElementPropertyInterface):
         #: Todo put this into a test
         assert np.isclose(r, obj.PolynomB[2], rtol=1e-12, atol=1e-12)
         return r
+
+
+class MainStrengthForDipole(ElementPropertyInterface):
+    def __repr__(self):
+        return f"{self.__class__.__name__}()"
+
+    def handles_property(self) -> str:
+        return "main_strength"
+
+    async def update(self, obj, value: object):
+        raise NotImplementedError("Main strength for dipole not handled")
+
+    def peek(self, obj) -> object:
+        # the beam energy is not necessarily part of the dipole object
+        # todo: add appropriate logging or error messages
+        beam_energy = obj.Energy
+        r = estimate_dipole_main_field(
+            beam_energy=beam_energy,
+            dipole_angle=obj.BendingAngle,
+            path_length=obj.Length,
+        )
+        return r
+
 
 
 __all__ = ["MainStrengthForQuadrupole", "MainStrengthForSextupole"]
