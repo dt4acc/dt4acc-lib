@@ -34,12 +34,19 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
         Args:
             at_lattice: The actual AT lattice used to retrieve elements.
         """
-        self.acc = at_lattice
+        # keep a storage of the original lattice
+        self.acc_orig_store = at_lattice.copy()
+        self.acc = None
+        self.reinit()
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(at_lattice={self.acc})"
 
+    def reinit(self):
+        self.acc = self.acc_orig_store.copy()
+
     def get_optics_parameters(self):
+        assert self.acc is not None, f"{self.__class__.__name__} is not properly initalise"
         x0, ring_pars, elem_data = self.acc.get_optics(at.All)
         return x0, ring_pars, elem_data
 

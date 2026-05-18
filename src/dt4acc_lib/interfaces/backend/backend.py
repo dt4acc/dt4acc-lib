@@ -28,3 +28,15 @@ class BackendRW(BackendR, metaclass=ABCMeta):
     @abstractmethod
     async def set(self, dev_id: str, prop_id: str, value: object):
         raise NotImplementedError("use base class instead")
+
+
+class SimulatorBackendRW(BackendRW, metaclass=ABCMeta):
+    """Methods that a real world backend would not provide
+
+    Todo:
+        revisit if that is not the case ....
+    """
+    @abstractmethod
+    async def reset(self):
+        """Reset the simulation back end """
+        raise NotImplementedError("use base class instead")
