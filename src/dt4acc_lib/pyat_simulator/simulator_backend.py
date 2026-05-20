@@ -12,7 +12,7 @@ import threading
 
 from transitions import Machine
 
-from dt4acc_lib.interfaces.backend.backend import BackendRW
+from dt4acc_lib.interfaces.backend.backend import SimulatorBackendRW
 from dt4acc_lib.interfaces.simulator.result_element import ResultElement
 from dt4acc_lib.model.output.tune import Tune
 from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface
@@ -124,7 +124,7 @@ class SimulationStateModel:
     """
 
 
-class SimulatorBackend(BackendRW):
+class SimulatorBackend(SimulatorBackendRW):
     """Simulation backend based on pyAT
 
     I assume today that the calculation engine works the following way:
@@ -142,11 +142,12 @@ class SimulatorBackend(BackendRW):
 
     Todo:
         * where to break async / sync or threaded approach?
-        * calculation lock: should user be able to provide one?
-
+        * calculation lock: defaults to a threading.lock
     """
 
-    def __init__(self, *, acc: AcceleratorSimulatorInterface, name: str, logger=logger):
+    def __init__(
+        self, *, acc: AcceleratorSimulatorInterface, name: str, logger=logger, calculation_lock=None
+    ):
         self.acc = acc
         self.logger = logger
         self.name = name
@@ -160,7 +161,9 @@ class SimulatorBackend(BackendRW):
         #
         # Todo: should reads also be protected (by a Read / Write Lock)
         #       should the lock be an asyncio lock?
-        self.calculation_lock = threading.Lock()
+        if calculation_lock is None:
+            calculation_lock = threading.Lock()
+        self.calculation_lock = calculation_lock
         self.model = SimulationStateModel()
         self.state = Machine(
             model=self.model,
@@ -191,6 +194,16 @@ class SimulatorBackend(BackendRW):
 
     def get_natural_view_name(self):
         return "design"
+
+    async def reset(self):
+        with self.calculation_lock:
+            self._clear_stored_results()
+            if self.model.is_error():
+                self.model.clear()
+            elif not self.model.is_pending():
+                self.model.changed()
+            # Todo: find out where element names are added
+            self.elem_names = None
 
     async def trigger(self, dev_id: str, prop_id: str):
         self.logger.info(
