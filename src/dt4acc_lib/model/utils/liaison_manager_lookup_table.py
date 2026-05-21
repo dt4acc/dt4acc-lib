@@ -75,6 +75,7 @@ def check_unique_entries(
     d = defaultdict(list)
     for elem in elems:
         d[extract_id(elem)].append(elem)
-    return {k : v for k,v in d.items() if len(v) > 1}
+    r =  {k : v for k,v in d.items() if len(v) > 1}
+    return r
 
 
