@@ -204,6 +204,7 @@ class SimulatorBackend(SimulatorBackendRW):
                 self.model.changed()
             # Todo: find out where element names are added
             self.elem_names = None
+            self.acc.reinit()
 
     async def trigger(self, dev_id: str, prop_id: str):
         self.logger.info(
