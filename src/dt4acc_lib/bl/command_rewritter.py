@@ -139,6 +139,14 @@ class CommandRewriter(CommandRewriterBase):
 
     def forward_read_command(self, command: ReadCommand) -> Sequence[ReadCommand]:
         """
+
+        Note:
+            the direction linkage is as in the context of
+            the update command.
+
+            The cooresponding translation object would have to
+            be called with inverse ...
+
         Todo:
             is there a use case where one lattice read command
             goes to more than one device ?
@@ -153,6 +161,16 @@ class CommandRewriter(CommandRewriterBase):
         ]
 
     def inverse_read_command(self, command: ReadCommand) -> Sequence[ReadCommand]:
+        """
+        Note:
+            the direction linkage is as in the context of
+            the update command.
+
+            The cooresponding translation object would have to
+            be called with forward ...
+
+
+        """
         dev_prop_id = DevicePropertyID(
             device_name=command.id, property=command.property
         )
