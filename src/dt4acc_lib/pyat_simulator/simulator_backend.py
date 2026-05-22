@@ -13,15 +13,16 @@ import threading
 from transitions import Machine
 
 from dt4acc_lib.interfaces.backend.backend import SimulatorBackendRW
-from dt4acc_lib.interfaces.simulator.result_element import ResultElement
-from dt4acc_lib.model.output.tune import Tune
 from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface
+from dt4acc_lib.interfaces.simulator.result_element import ResultElement
+from dt4acc_lib.model.output.calculated_track import CalculatedTrack, CalculatedPosition
+from dt4acc_lib.model.output.tune import Tune
+from dt4acc_lib.model.output.twiss import Twiss, TwissAtPosition, TwissParameters
 
 from .model.calculation_states import CalculationStates as States
-from model.output.calculated_track import CalculatedTrack, CalculatedPosition
-from model.output.twiss import Twiss, TwissParameters, TwissAtPosition
 
 logger = logging.getLogger()
+
 
 class OrbitElement(ResultElement):
     """Orbit as represented by beam position monitors
