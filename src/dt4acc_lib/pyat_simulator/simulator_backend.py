@@ -18,8 +18,8 @@ from dt4acc_lib.model.output.tune import Tune
 from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface
 
 from .model.calculation_states import CalculationStates as States
-from dt4acc.core.model.output.calculated_track import CalculatedTrack, CalculatedPosition
-from dt4acc.core.model.output.twiss import Twiss, TwissParameters, TwissAtPosition
+from model.output.calculated_track import CalculatedTrack, CalculatedPosition
+from model.output.twiss import Twiss, TwissParameters, TwissAtPosition
 
 logger = logging.getLogger()
 
@@ -43,12 +43,12 @@ class TrackElement(ResultElement):
         self.backend = backend
 
     def get(self, prop_id: str) -> CalculatedTrack:
-        names, optics_parameters = self.backend.get_optics()
+        names, uuids, optics_parameters = self.backend.get_optics()
         _, ring_pars, elem_data =  optics_parameters
         r =  CalculatedTrack(
             track=[
-                CalculatedPosition(name=name, x=state[0], y=state[2])
-                for name, state in zip(names, elem_data["closed_orbit"])
+                CalculatedPosition(fam_name=name, uid=uid, x=state[0], y=state[2])
+                for name, uid, state in zip(names, uuids, elem_data["closed_orbit"])
             ]
         )
         return r
@@ -60,12 +60,13 @@ class TwissElement(ResultElement):
         self.backend = backend
 
     def get(self, prop_id: str) -> Twiss:
-        elem_names, optics_parameters = self.backend.get_optics()
+        fam_names, elem_uids, optics_parameters = self.backend.get_optics()
         _, ring_pars, elem_data =  optics_parameters
         r = Twiss(
             twiss=[
                 TwissAtPosition(
-                    name=elm_name,
+                    fam_name=fam_name,
+                    uid=elm_uid,
                     x=TwissParameters(
                         beta=ed["beta"][0],
                         alpha=ed["alpha"][0],
@@ -77,7 +78,7 @@ class TwissElement(ResultElement):
                         nu=ed["mu"][1]
                     )
                 )
-                for elm_name, ed in zip(elem_names, elem_data)
+                for fam_name, elm_uid, ed in zip(fam_names, elem_uids, elem_data)
             ])
         return r
 
@@ -153,6 +154,9 @@ class SimulatorBackend(SimulatorBackendRW):
         self.name = name
 
         self.optics = None
+        # These "must" be unique
+        self.elem_uids = None
+        # These are allowed to repeat
         self.elem_names = None
 
         # While calculation is running
@@ -203,6 +207,7 @@ class SimulatorBackend(SimulatorBackendRW):
             elif not self.model.is_pending():
                 self.model.changed()
             # Todo: find out where element names are added
+            self.elem_uids = None
             self.elem_names = None
             self.acc.reinit()
 
@@ -245,7 +250,7 @@ class SimulatorBackend(SimulatorBackendRW):
     def get_optics(self):
         self._calculate_optics_if_required()
         assert self.optics is not None, "expected some optics stored, but only found None"
-        return self.elem_names, self.optics
+        return self.elem_names, self.elem_uids, self.optics
 
     def _calculate_optics_if_required(self):
         with self.calculation_lock:
@@ -272,9 +277,17 @@ class SimulatorBackend(SimulatorBackendRW):
             self.model.error()
             raise exc
         self.optics = optics
+
+        def extract_element_id(elem):
+            if hasattr(elem, "UUID"):
+                return elem.UUID
+            return elem.FamName
+
         elem_names = [elem.FamName for elem in self.acc.acc]
+        elem_uids = [extract_element_id(elem) for elem in self.acc.acc]
         # optics repeats data for the first element
         self.elem_names = elem_names + [elem_names[0]]
+        self.elem_uids = elem_uids + [elem_uids[0]]
         logger.info("Calculated optics x0 = %s", optics[0])
         # logger.info("Calculated optics (twiss) ?to x=%.4f y=%.4f", self.tune.x, self.tune.y)
 
