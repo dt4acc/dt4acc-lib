@@ -39,6 +39,11 @@ class TranslatorLookupTableElement:
 class TranslatorLookupTable:
     lut: Sequence[TranslatorLookupTableElement]
 
+    def verify(self):
+        # Construct the dictionary
+        # will fail e.g. if lists are used as conversion identifiers
+        _ = self._dict
+
     def get(self, item: ConversionID):
         return self._dict.get(item)
 
