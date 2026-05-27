@@ -2,23 +2,33 @@ import logging
 
 import numpy as np
 from typing import Sequence
+
+from scipy.constants import speed_of_light
+
 from dt4acc_lib.interfaces.utils.state_conversion import StateConversion
-from dt4acc_lib.model.utils.translator_manager_lookup_table import CurvePoint
+from dt4acc_lib.model.utils.translator_manager_lookup_table import (
+    CurvePoint,
+    MultiplyerScaledByEnergy,
+)
 from scipy.interpolate import interp1d
 
 logger = logging.getLogger("dt4acc_lib")
 
 
-def calculate_brho(energy: float, rest_mass: float=511e3) -> float:
+def calculate_brho(energy: float, rest_mass: float = 511e3) -> float:
     """
     Todo:
         Energy is assumed here to be in eV not GeV
     """
-    energy_without_rest_mass = np.sqrt((energy + rest_mass)**2 - rest_mass**2)
-    # todo: get it from constants
-    speed_of_light = 299792458.2
+    energy_without_rest_mass = np.sqrt((energy + rest_mass) ** 2 - rest_mass ** 2)
     brho = energy_without_rest_mass / speed_of_light
     return brho
+
+
+def calculate_brho_inverse(brho: float, rest_mass: float = 511e3) -> float:
+    energy_without_rest_mass = brho * speed_of_light
+    energy = np.sqrt((energy_without_rest_mass) ** 2 - rest_mass ** 2) - rest_mass
+    return energy
 
 
 class EnergyDependentLinearUnitConversion(StateConversion):
@@ -104,7 +114,7 @@ class EnergyIndependentCurveUnitConversion(StateConversion):
         # todo: see how it was named at max iv
         #       iimplement it in a filter delegating implementation to this object
         flip_dep_sign: False,
-        length : float
+        length: float
     ):
         # forward interpolator: will raise if x out of bounds
         # TODO: clean up it is a mess at the moment
@@ -136,17 +146,66 @@ class EnergyIndependentCurveUnitConversion(StateConversion):
         y = float(self._fwd(x))  # interp1d returns an array-like
         if self.flip_dep_sign:
             y = -y
-        return  y * self.brho
+        return y * self.brho
 
     def inverse(self, state: float) -> float:
         # logger.info("%s.inverse: brho %s points %d state %s", self.__class__.__name__, self.brho, len(self._indep), state)
         if self.brho == 0:
             raise ValueError("brho must be non-zero for inversion")
         target = float(state) / self.brho
-        y = float(self._bwd(target)) # interp1d returns an array-like
+        y = float(self._bwd(target))  # interp1d returns an array-like
         assert np.isfinite(y), "failed to inverse {state=} ({brho=}, {target=})"
         if self.flip_dep_sign:
             y = y * -1
         return y / self.length
 
-__all__ = ["EnergyDependentLinearUnitConversion", "LinearUnitConversion", "EnergyIndependentCurveUnitConversion"]
+
+class MultiplierScaledByEnergyUnitConversion(StateConversion):
+    def __init__(self, *, conv_data: MultiplyerScaledByEnergy, brho: float):
+        """Todo: need actual brho or energy"""
+        self.brho = float(brho)
+        self.conv_data = conv_data
+
+        self.fwd_interp = interp1d(
+            [t.dep for t in conv_data.scale_by_energy],
+            [t.indep for t in conv_data.scale_by_energy],
+            kind="linear",
+            # Todo: change later to true ... or make user configurable
+            bounds_error=False,
+        )
+        self.bwd_interp = interp1d(
+            [t.indep for t in conv_data.scale_by_energy],
+            [t.dep for t in conv_data.scale_by_energy],
+            kind="linear",
+            # Todo: change later to true ... or make user configurable
+            bounds_error=False,
+        )
+
+    def forward(self, state: float) -> float:
+        """corresponds to k2amp"""
+        ref_field = state * self.brho
+        t_brho = ref_field / self.conv_data.reference_multiplyer
+        energy = calculate_brho_inverse(t_brho)
+        amps = self.fwd_interp(energy)
+        return amps
+
+    def inverse(self, state: float) -> float:
+        """corresponds to amp2k"""
+        lambda_ = self.conv_data.range.scale(state)
+        corresponding_energy = self.bwd_interp(lambda_)
+        t_scale = self.conv_data.reference_multiplyer
+        ref_brho = calculate_brho(self.conv_data.reference_energy)
+        t_brho = calculate_brho(corresponding_energy)
+        correction = t_brho / ref_brho
+        scale = t_scale * correction
+        return scale * state
+
+
+__all__ = [
+    "EnergyDependentLinearUnitConversion",
+    "LinearUnitConversion",
+    "EnergyIndependentCurveUnitConversion",
+    "MultiplierScaledByEnergyUnitConversion",
+    "calculate_brho_inverse",
+    "calculate_brho",
+]
