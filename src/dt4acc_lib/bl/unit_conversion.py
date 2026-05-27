@@ -3,10 +3,22 @@ import logging
 import numpy as np
 from typing import Sequence
 from dt4acc_lib.interfaces.utils.state_conversion import StateConversion
-from dt4acc_lib.model.utils.identifiers import CurvePoint
+from dt4acc_lib.model.utils.translator_manager_lookup_table import CurvePoint
 from scipy.interpolate import interp1d
 
 logger = logging.getLogger("dt4acc_lib")
+
+
+def calculate_brho(energy: float, rest_mass: float=511e3) -> float:
+    """
+    Todo:
+        Energy is assumed here to be in eV not GeV
+    """
+    energy_without_rest_mass = np.sqrt((energy + rest_mass)**2 - rest_mass**2)
+    # todo: get it from constants
+    speed_of_light = 299792458.2
+    brho = energy_without_rest_mass / speed_of_light
+    return brho
 
 
 class EnergyDependentLinearUnitConversion(StateConversion):
@@ -70,7 +82,6 @@ class LinearUnitConversion(StateConversion):
             state,
         )
         return (state - self.intercept) / self.slope
-
 
 
 class EnergyIndependentCurveUnitConversion(StateConversion):
