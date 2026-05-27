@@ -167,18 +167,22 @@ class MultiplierScaledByEnergyUnitConversion(StateConversion):
         self.conv_data = conv_data
 
         self.fwd_interp = interp1d(
-            [t.dep for t in conv_data.scale_by_energy],
+            # from energy to scaled current
             [t.indep for t in conv_data.scale_by_energy],
+            [t.dep for t in conv_data.scale_by_energy],
             kind="linear",
             # Todo: change later to true ... or make user configurable
             bounds_error=False,
+            fill_value="extrapolate"
         )
         self.bwd_interp = interp1d(
-            [t.indep for t in conv_data.scale_by_energy],
+            # from scaled current to energy
             [t.dep for t in conv_data.scale_by_energy],
+            [t.indep for t in conv_data.scale_by_energy],
             kind="linear",
             # Todo: change later to true ... or make user configurable
             bounds_error=False,
+            fill_value="extrapolate"
         )
 
     def forward(self, state: float) -> float:
@@ -193,12 +197,12 @@ class MultiplierScaledByEnergyUnitConversion(StateConversion):
         """corresponds to amp2k"""
         lambda_ = self.conv_data.range.scale(state)
         corresponding_energy = self.bwd_interp(lambda_)
-        t_scale = self.conv_data.reference_multiplyer
+        ref_k = self.conv_data.reference_multiplyer
         ref_brho = calculate_brho(self.conv_data.reference_energy)
+        # Todo: fix data to be in eV
         t_brho = calculate_brho(corresponding_energy)
         correction = t_brho / ref_brho
-        scale = t_scale * correction
-        return scale * state
+        return ref_k * correction
 
 
 __all__ = [
