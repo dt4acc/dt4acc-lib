@@ -119,8 +119,8 @@ class EnergyIndependentCurveUnitConversion(StateConversion):
         # forward interpolator: will raise if x out of bounds
         # TODO: clean up it is a mess at the moment
         self._fwd = interp1d(
-            [t.indep for t in fwd_points],
             [t.dep for t in fwd_points],
+            [t.indep for t in fwd_points],
             kind="linear",
             # Todo: change later to true ... or make user configurable
             bounds_error=False,
@@ -190,8 +190,9 @@ class MultiplierScaledByEnergyUnitConversion(StateConversion):
         ref_field = state * self.brho
         t_brho = ref_field / self.conv_data.reference_multiplyer
         energy = calculate_brho_inverse(t_brho)
-        amps = self.fwd_interp(energy)
-        return amps
+        scale = self.fwd_interp(energy)
+        r = self.conv_data.range.interpolate(scale)
+        return r
 
     def inverse(self, state: float) -> float:
         """corresponds to amp2k"""

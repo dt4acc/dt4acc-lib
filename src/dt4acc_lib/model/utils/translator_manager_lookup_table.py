@@ -41,6 +41,10 @@ class Range:
     def scale(self, value: float) -> float:
         return (value - self.min) / (self.max - self.min)
 
+    def interpolate(self, lambda_: float):
+        """A value that is 0 at min and 1 at max"""
+        return self.min * (1 - lambda_) + self.max * lambda_
+
 
 @dataclass
 class MultiplyerScaledByEnergy:
