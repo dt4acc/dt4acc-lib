@@ -89,7 +89,7 @@ class TuneElement(ResultElement):
 
     def get(self, prop_id: str) -> Tune:
         assert prop_id == "transversal", f"Only prepared to handle transversal tune but got {prop_id}"
-        names, optics_parameters = self.backend.get_optics()
+        names, uuids, optics_parameters = self.backend.get_optics()
         _, ring_pars, __ =  optics_parameters
         tune = ring_pars["tune"]
         return Tune(x=tune[0], y=tune[1])
