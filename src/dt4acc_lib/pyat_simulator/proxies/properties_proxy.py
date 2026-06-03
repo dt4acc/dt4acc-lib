@@ -63,7 +63,7 @@ class PropertiesProxy(ElementInterface):
         if property_id.startswith("set_"):
             property_id = property_id[4:]
         else:
-            self.log.warning(
+            self.log.info(
                 f"{self.__class__.__name__}("
                 "name={self.name},"
                 ")"
