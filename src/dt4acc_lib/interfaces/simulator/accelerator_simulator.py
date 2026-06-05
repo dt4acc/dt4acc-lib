@@ -6,8 +6,10 @@ Todo:
 
 """
 from abc import ABCMeta, abstractmethod
+from typing import Sequence
 
 from .element import ElementInterface
+from ...model.output.survey import SurveyDataForElement
 
 
 class AcceleratorSimulatorInterface(metaclass=ABCMeta):
@@ -23,6 +25,11 @@ class AcceleratorSimulatorInterface(metaclass=ABCMeta):
         Review if derived classes use async implementations
         """
         pass
+
+    @abstractmethod
+    def get_survey(self) -> Sequence[SurveyDataForElement]:
+        """Get survey data information
+        """
 
     @abstractmethod
     def get_optics_parameters(self):

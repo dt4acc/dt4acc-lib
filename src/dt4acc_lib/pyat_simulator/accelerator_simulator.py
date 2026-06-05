@@ -1,8 +1,12 @@
+from typing import Sequence
+
 from .element_proxies import ElementProxy
 # Todo: revisit should that not rather be a storage
 from .element_proxies import ADDON_PROXY_REGISTRY
 from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface
 import at
+
+from ..model.output.survey import SurveyDataForElement
 
 
 class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
@@ -49,6 +53,9 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
         assert self.acc is not None, f"{self.__class__.__name__} is not properly initalise"
         x0, ring_pars, elem_data = self.acc.get_optics(at.All)
         return x0, ring_pars, elem_data
+
+    def get_survey(self):
+        return at.get_s_pos(self.acc)
 
     # def get_twiss(self) -> Twiss:
     #     pass
