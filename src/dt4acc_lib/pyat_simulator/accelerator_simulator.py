@@ -15,6 +15,8 @@ from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSim
 from dt4acc_lib.interfaces.simulator.element import ElementInterface
 from dt4acc_lib.pyat_simulator.proxies.proxy_factory import ElementProxyFactory
 
+from ..model.output.survey import SurveyDataForElement
+
 
 class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
     """
