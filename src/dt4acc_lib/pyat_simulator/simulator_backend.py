@@ -97,25 +97,44 @@ class TuneElement(ResultElement):
 
 class ChromaticityElement(ResultElement):
     """Returns chromaticity (xi_x, xi_y) from AT.
+
     Uses at.get_optics with get_chrom=True which is available in pyAT >= 0.8.
     Falls back gracefully if not supported (e.g. 4D lattice without RF).
+
+    Todo:
+        * rework it that is uses backend
+        * return proper object
     """
     def __init__(self, backend):
         self.backend = backend
 
-    def get(self, prop_id: str) -> Tune:
+    def get(self, prop_id: str) -> Chromaticity:
         assert prop_id == "transversal", f"Only prepared to handle transversal chromaticity but got {prop_id}"
         try:
+            # Todo: fix this translation
             import at
-            import math
             ring = self.backend.acc.acc
             _, ring_pars, _ = ring.get_optics(at.All, get_chrom=True)
-            chroma = ring_pars["chromaticity"]
-            if chroma is not None and not any(math.isnan(c) for c in chroma):
-                return Tune(x=float(chroma[0]), y=float(chroma[1]))
+            chroma_hor, chroma_vert = ring_pars["chromaticity"]
+            assert not math.isnan(chroma_hor)
+            assert not math.isnan(chroma_vert)
+            return Chromaticity(x=float(chroma_hor), y=float(chroma_vert))
         except Exception:
-            pass
-        return Tune(x=0.0, y=0.0)
+            logger.info("Failed to retrieve chromaticity data from %s", self.backend)
+        return Chromaticity(x=math.nan, y=math.nan)
+
+
+class SurveyElement(ResultElement):
+    """
+    """
+    def __init__(self, backend):
+        self.backend = backend
+
+    def get(self, prop_id: str) -> Sequence[SurveyElementModel]:
+        assert prop_id == "s", f"Only ready for s position but got {prop_id} "
+        r = self.backend.get_survey()
+        return r
+
 
 class SimulationStateModel:
     """all methods added by class::`transitions.Machine`
@@ -191,6 +210,7 @@ class SimulatorBackend(SimulatorBackendRW):
             tune=TuneElement(backend=self),
             chromaticity=ChromaticityElement(backend=self),
             twiss=TwissElement(backend=self),
+            survey=SurveyElement(backend=self),
         )
 
     def _clear_stored_results(self):
@@ -248,6 +268,11 @@ class SimulatorBackend(SimulatorBackendRW):
         return f"{self.__class__.__name__}(name={self.name}, acc={self.acc})"
 
     def get_optics(self):
+        """
+        Todo:
+            split it up in explicit functions
+            Review when an other backend is needed
+        """
         self._calculate_optics_if_required()
         assert self.optics is not None, "expected some optics stored, but only found None"
         return self.elem_names, self.elem_uids, self.optics
@@ -278,6 +303,7 @@ class SimulatorBackend(SimulatorBackendRW):
             raise exc
         self.optics = optics
 
+    def _create_element_names_and_uids(self):
         def extract_element_id(elem):
             if hasattr(elem, "UUID"):
                 return elem.UUID
@@ -288,8 +314,27 @@ class SimulatorBackend(SimulatorBackendRW):
         # optics repeats data for the first element
         self.elem_names = elem_names + [elem_names[0]]
         self.elem_uids = elem_uids + [elem_uids[0]]
-        logger.info("Calculated optics x0 = %s", optics[0])
-        # logger.info("Calculated optics (twiss) ?to x=%.4f y=%.4f", self.tune.x, self.tune.y)
+
+    def get_element_names(self) -> Sequence[str]:
+        if self.elem_names is None:
+            self._create_element_names_and_uids()
+        return self.elem_names
+
+    def get_element_uids(self) -> Sequence[str]:
+        if self.elem_uids is None:
+            self._create_element_names_and_uids()
+        return self.elem_uids
+
+    def get_survey(self) -> Sequence[SurveyElementModel]:
+        # a sign of one layer too much ?
+        elm_names = self.get_element_names()
+        elm_uids = self.get_element_uids()
+        s_pos = self.acc.get_survey()
+        r = [
+            SurveyElementModel(s=float(s), name=name, uid=uid)
+            for name, uid, s  in zip(elm_names, elm_uids, s_pos)
+        ]
+        return r
 
 
 _all__ = ["SimulationBackend"]
