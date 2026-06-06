@@ -89,8 +89,8 @@ class TuneElement(ResultElement):
 
     def get(self, prop_id: str) -> Tune:
         assert prop_id == "transversal", f"Only prepared to handle transversal tune but got {prop_id}"
-        names, optics_parameters = self.backend.get_optics()
-        _, ring_pars, __ =  optics_parameters
+        _, __, optics_parameters = self.backend.get_optics()
+        _, ring_pars, __ = optics_parameters
         tune = ring_pars["tune"]
         return Tune(x=tune[0], y=tune[1])
 
@@ -107,12 +107,11 @@ class ChromaticityElement(ResultElement):
         assert prop_id == "transversal", f"Only prepared to handle transversal chromaticity but got {prop_id}"
         try:
             import at
+            import math
             ring = self.backend.acc.acc
             _, ring_pars, _ = ring.get_optics(at.All, get_chrom=True)
             chroma = ring_pars["chromaticity"]
-            if chroma is not None and not any(
-                __import__("math").isnan(c) for c in chroma
-            ):
+            if chroma is not None and not any(math.isnan(c) for c in chroma):
                 return Tune(x=float(chroma[0]), y=float(chroma[1]))
         except Exception:
             pass
