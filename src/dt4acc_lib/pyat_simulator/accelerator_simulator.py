@@ -3,7 +3,6 @@ import at
 from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface
 from dt4acc_lib.interfaces.simulator.element import ElementInterface
 from dt4acc_lib.pyat_simulator.proxies.proxy_factory import ElementProxyFactory
-from dt4acc_lib.pyat_simulator.proxies.addon_registry import ADDON_PROXY_REGISTRY
 
 
 class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
@@ -11,10 +10,7 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
     Accelerator simulator using the new ElementProxyFactory.
 
     Element lookup strategy (in order):
-      1. Compound id "type_prefix:host_uuid" → ADDON_PROXY_REGISTRY
-         (correctors living on a host element, e.g. CQLN/CQLT)
-      2. UUID attribute match: element.UUID == element_id  (SOLEIL .m lattice)
-      3. FamName match: element.FamName == element_id      (MAX IV JSON lattice)
+      1. UUID attribute match: element.UUID == element_id  if not found then try FamName match: element.FamName == element_id
     """
 
     def __init__(self, *, at_lattice, proxy_factory: ElementProxyFactory = None):
@@ -57,20 +53,6 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
         return result
 
     def get(self, element_id) -> ElementInterface:
-        # 1. Compound id: "type_prefix:host_uuid" → ADDON_PROXY_REGISTRY
-        if isinstance(element_id, str) and ":" in element_id:
-            type_prefix, host_uuid = element_id.split(":", 1)
-            factory = ADDON_PROXY_REGISTRY.get(type_prefix)
-            if factory is not None:
-                matches = self._find_by_uuid(host_uuid)
-                if not matches:
-                    raise ValueError(
-                        f"Host element {host_uuid!r} not found in lattice "
-                        f"for compound id {element_id!r}."
-                    )
-                (element,) = matches
-                return factory(element, element_id, host_uuid)
-
         # 2. Single UUID/FamName → ElementProxyFactory
         matches = self._find_by_uuid(element_id)
         if not matches:
