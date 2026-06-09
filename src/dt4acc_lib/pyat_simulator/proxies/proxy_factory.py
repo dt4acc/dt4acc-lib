@@ -80,12 +80,13 @@ def at_element_properties_lut() -> Dict[str, Sequence[ElementPropertyInterface]]
     ]
     all_magnets_properties = multipoles + [XKick(), YKick()] + geometric_properties
     r = {
-        at.Dipole.__name__: [MainStrengthForDipole()] + all_magnets_properties,
-        at.Corrector.__name__: [XKick(), YKick()],
+        at.Dipole.__name__:     [MainStrengthForDipole()] + all_magnets_properties,
+        at.Corrector.__name__:  [XKick(), YKick()],
         at.Quadrupole.__name__: [MainStrengthForQuadrupole()] + all_magnets_properties,
-        at.Sextupole.__name__: [MainStrengthForSextupole()] + all_magnets_properties,
-        at.Multipole.__name__: all_magnets_properties,
-        at.RFCavity.__name__: [Frequency(), Voltage()] + geometric_properties,
+        at.Sextupole.__name__:  [MainStrengthForSextupole()] + all_magnets_properties,
+        at.Multipole.__name__:  all_magnets_properties,
+        at.Octupole.__name__:   all_magnets_properties,  # SOLEIL octupoles are at.Octupole
+        at.RFCavity.__name__:   [Frequency(), Voltage()] + geometric_properties,
     }
     return r
 
