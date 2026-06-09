@@ -95,9 +95,9 @@ def check_multipole_index(idx):
         )
 
 
-def update_magnetic_polynom(
+def update_magnetic_polynom_coefficients(
     polynom: Sequence[float], coeffs: Dict[int, float], copy: bool = True
-):
+) -> Sequence[float]:
     """
     coeffs: coefficients to update. cofficient index in European Convention
 
@@ -144,6 +144,6 @@ __all__ = [
     "manipulate_kick",
     "estimate_shift",
     "update_shift",
-    "update_magnetic_polynom",
+    "update_magnetic_polynom_coefficients",
     "check_multipole_index",
 ]

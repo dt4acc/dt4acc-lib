@@ -11,6 +11,10 @@ from dt4acc_lib.pyat_simulator.proxies.proxy_factory import (
     create_at_properties_lut_per_element_cls,
     ElementProxyFactory,
 )
+from dt4acc_lib.pyat_simulator.element_properties.multipole import (
+    Multipole,
+    NormalSkew,
+)
 
 
 def test_at_proxy_instantiation():
@@ -112,6 +116,35 @@ async def test_quadrupole_update():
     assert val == pytest.approx(K / 4, abs=1e-12, rel=1e-12)
     val = proxy.peek("main_strength")
     assert val == pytest.approx(K / 4, abs=1e-12, rel=1e-12)
+
+
+@pytest.mark.asyncio
+async def test_multipole_update():
+    K = 31.2
+    A = -0.75
+    q = at.Quadrupole(family_name="multi_tst", length=0.133, k=K)
+
+    normal = Multipole(NormalSkew.normal, 2)
+    skew = Multipole(NormalSkew.skew, 2)
+
+    assert normal.handles_property() == "B2"
+    assert skew.handles_property() == "A2"
+
+    val = normal.peek(q)
+    assert val == pytest.approx(K, abs=1e-12, rel=1e-12)
+
+    val = skew.peek(q)
+    assert val == pytest.approx(0, abs=1e-12, rel=1e-12)
+
+    await normal.update(q, K / 4)
+    val = normal.peek(q)
+    assert val == pytest.approx(K / 4, abs=1e-12, rel=1e-12)
+    assert q.PolynomB[1] == pytest.approx(K / 4, abs=1e-12, rel=1e-12)
+
+    await skew.update(q, A)
+    val = skew.peek(q)
+    assert val == pytest.approx(A, abs=1e-12, rel=1e-12)
+    assert q.PolynomA[1] == pytest.approx(A, abs=1e-12, rel=1e-12)
 
 
 @pytest.mark.asyncio
