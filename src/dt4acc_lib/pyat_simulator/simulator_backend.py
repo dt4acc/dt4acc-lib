@@ -9,6 +9,7 @@ Todo:
 
 import logging
 import threading
+from typing import Sequence
 
 from transitions import Machine
 
@@ -16,7 +17,8 @@ from dt4acc_lib.interfaces.backend.backend import SimulatorBackendRW
 from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface
 from dt4acc_lib.interfaces.simulator.result_element import ResultElement
 from dt4acc_lib.model.output.calculated_track import CalculatedTrack, CalculatedPosition
-from dt4acc_lib.model.output.tune import Tune
+from dt4acc_lib.model.output.survey import SurveyDataForElement
+from dt4acc_lib.model.output.tune import Tune, Chromaticity
 from dt4acc_lib.model.output.twiss import Twiss, TwissAtPosition, TwissParameters
 
 from .model.calculation_states import CalculationStates as States
@@ -130,7 +132,7 @@ class SurveyElement(ResultElement):
     def __init__(self, backend):
         self.backend = backend
 
-    def get(self, prop_id: str) -> Sequence[SurveyElementModel]:
+    def get(self, prop_id: str) -> Sequence[SurveyDataForElement]:
         assert prop_id == "s", f"Only ready for s position but got {prop_id} "
         r = self.backend.get_survey()
         return r
@@ -325,13 +327,13 @@ class SimulatorBackend(SimulatorBackendRW):
             self._create_element_names_and_uids()
         return self.elem_uids
 
-    def get_survey(self) -> Sequence[SurveyElementModel]:
+    def get_survey(self) -> Sequence[SurveyDataForElement]:
         # a sign of one layer too much ?
         elm_names = self.get_element_names()
         elm_uids = self.get_element_uids()
         s_pos = self.acc.get_survey()
         r = [
-            SurveyElementModel(s=float(s), name=name, uid=uid)
+            SurveyDataForElement(s=float(s), name=name, uid=uid)
             for name, uid, s  in zip(elm_names, elm_uids, s_pos)
         ]
         return r

@@ -8,6 +8,7 @@ Uses ElementProxyFactory (new property proxy architecture) for all standard
 AT element classes. Compound element IDs (e.g. "CQLN:<host_uuid>") are still
 resolved via ADDON_PROXY_REGISTRY for correctors living on a host element.
 """
+from typing import Sequence
 
 import at
 import copy
@@ -46,6 +47,10 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
             f"{self.__class__.__name__} is not properly initialised"
         x0, ring_pars, elem_data = self.acc.get_optics(at.All)
         return x0, ring_pars, elem_data
+
+    def get_survey(self) -> Sequence[SurveyDataForElement]:
+        r = at.get_s_pos(self.acc)
+        return r
 
     def _find_by_uuid(self, uuid: str) -> list:
         """Find element(s) by UUID (SOLEIL) or FamName (MAX IV). Returns [] if not found."""
