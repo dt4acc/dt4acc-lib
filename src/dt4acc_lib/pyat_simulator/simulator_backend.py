@@ -16,7 +16,8 @@ from dt4acc_lib.interfaces.backend.backend import SimulatorBackendRW
 from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface
 from dt4acc_lib.interfaces.simulator.result_element import ResultElement
 from dt4acc_lib.model.output.calculated_track import CalculatedTrack, CalculatedPosition
-from dt4acc_lib.model.output.tune import Tune
+from dt4acc_lib.model.output.tune import Tune, Chromaticity
+from ..model.output.survey import SurveyDataForElement as SurveyElementModel
 from dt4acc_lib.model.output.twiss import Twiss, TwissAtPosition, TwissParameters
 
 from .model.calculation_states import CalculationStates as States
