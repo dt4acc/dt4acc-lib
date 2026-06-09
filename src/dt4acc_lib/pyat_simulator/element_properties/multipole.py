@@ -1,7 +1,7 @@
 from enum import Enum
 
 from .element_property_interface import ElementPropertyInterface
-from .utils import check_multipole_index, update_magnetic_polynom
+from .utils import check_multipole_index, update_magnetic_polynom_coefficients
 
 
 class NormalSkew(Enum):
@@ -50,9 +50,11 @@ class Multipole(ElementPropertyInterface):
 
     async def update(self, obj, value: float):
         if self.normal_skew.value == "normal":
-            update_magnetic_polynom(obj.PolynomB, {self.n_multipole: value})
+            new_poly = update_magnetic_polynom_coefficients(obj.PolynomB, {self.n_multipole: value})
+            obj.PolynomB[:] = new_poly
         elif self.normal_skew.value == "skew":
-            update_magnetic_polynom(obj.PolynomA, {self.n_multipole: value})
+            new_poly = update_magnetic_polynom_coefficients(obj.PolynomA, {self.n_multipole: value})
+            obj.PolynomA[:] = new_poly
         else:
             raise AssertionError("Should not end up here!")
 
