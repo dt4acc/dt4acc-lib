@@ -1,5 +1,16 @@
-import at
+"""
+accelerator_simulator.py
+========================
 
+PyATAcceleratorSimulator — replaces the old element_proxies-based version.
+
+Uses ElementProxyFactory (new property proxy architecture) for all standard
+AT element classes. Compound element IDs (e.g. "CQLN:<host_uuid>") are still
+resolved via ADDON_PROXY_REGISTRY for correctors living on a host element.
+"""
+
+import at
+import copy
 from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface
 from dt4acc_lib.interfaces.simulator.element import ElementInterface
 from dt4acc_lib.pyat_simulator.proxies.proxy_factory import ElementProxyFactory
@@ -7,14 +18,15 @@ from dt4acc_lib.pyat_simulator.proxies.proxy_factory import ElementProxyFactory
 
 class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
     """
-    Accelerator simulator using the new ElementProxyFactory.
+    Accelerator simulator using ElementProxyFactory.
 
-    Element lookup strategy (in order):
-      1. UUID attribute match: element.UUID == element_id  if not found then try FamName match: element.FamName == element_id
+    Element lookup strategy:
+      1. UUID attribute match: element.UUID == element_id  (SOLEIL .m lattice)
+      2. FamName match: element.FamName == element_id      (MAX IV JSON lattice)
     """
 
     def __init__(self, *, at_lattice, proxy_factory: ElementProxyFactory = None):
-        self.acc_orig_store = at_lattice.copy()
+        self.acc_orig_store = copy.deepcopy(at_lattice)
         self.acc = None
         self.reinit()
         if proxy_factory is None:
@@ -25,7 +37,7 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
         return f"{self.__class__.__name__}(at_lattice={self.acc})"
 
     def reinit(self):
-        self.acc = self.acc_orig_store.copy()
+        self.acc = copy.deepcopy(self.acc_orig_store)
 
     def get_optics_parameters(self):
         assert self.acc is not None, \
@@ -53,7 +65,6 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
         return result
 
     def get(self, element_id) -> ElementInterface:
-        # 2. Single UUID/FamName → ElementProxyFactory
         matches = self._find_by_uuid(element_id)
         if not matches:
             raise ValueError(
