@@ -8,6 +8,7 @@ Todo:
 """
 
 import logging
+import math
 import threading
 from typing import Sequence
 
@@ -117,7 +118,7 @@ class ChromaticityElement(ResultElement):
             import at
             ring = self.backend.acc.acc
             _, ring_pars, _ = ring.get_optics(at.All, get_chrom=True)
-            chroma_hor, chroma_vert = ring_pars["chromaticity"]
+            chroma_hor, chroma_vert, _ = ring_pars["chromaticity"]
             assert not math.isnan(chroma_hor)
             assert not math.isnan(chroma_vert)
             return Chromaticity(x=float(chroma_hor), y=float(chroma_vert))
@@ -277,7 +278,9 @@ class SimulatorBackend(SimulatorBackendRW):
         """
         self._calculate_optics_if_required()
         assert self.optics is not None, "expected some optics stored, but only found None"
-        return self.elem_names, self.elem_uids, self.optics
+        elem_names = self.get_element_names()
+        uids = self.get_element_uids()
+        return elem_names, uids, self.optics
 
     def _calculate_optics_if_required(self):
         with self.calculation_lock:
