@@ -1,10 +1,4 @@
 from dataclasses import dataclass
-from functools import cached_property
-from typing import Dict, Sequence, Optional
-
-
-
-
 
 
 @dataclass
@@ -54,3 +48,11 @@ class Tune:
 
     def __str__(self):
         return f"{self.__class__.__name__}(x={self.x:.4f}, y={self.y:.4f})"
+
+
+@dataclass
+class Chromaticity:
+    #: horizontal
+    x: float
+    #: vertical
+    y: float

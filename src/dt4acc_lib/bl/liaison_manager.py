@@ -70,7 +70,8 @@ class LiaisonManager(LiaisonManagerBase):
         logger.error(
             f"{self.__class__.__name__} id {id_} not found in lookup table"
         )
-        em = self.objects_for_device(id_.element_name)
+
+        em = self.objects_for_lattice_element(id_.element_name)
         logger.warning(f"{self.__class__.__name__}: For the element I know {em}")
         raise KeyError(f"forward lut does not contain entry {id_}")
 

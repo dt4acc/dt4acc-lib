@@ -82,7 +82,11 @@ def at_element_properties_lut() -> Dict[str, Sequence[ElementPropertyInterface]]
     r = {
         at.Dipole.__name__:     [MainStrengthForDipole()] + all_magnets_properties,
         at.Corrector.__name__:  [XKick(), YKick()],
+        # Todo: multipole B2 has to be special for quadrupole as it has to modify
+        #       K value too
         at.Quadrupole.__name__: [MainStrengthForQuadrupole()] + all_magnets_properties,
+        # Todo: multipole B3 has to be special for quadrupole as it has to modify
+        #       H? value too
         at.Sextupole.__name__:  [MainStrengthForSextupole()] + all_magnets_properties,
         at.Multipole.__name__:  all_magnets_properties,
         at.Octupole.__name__:   all_magnets_properties,  # SOLEIL octupoles are at.Octupole
