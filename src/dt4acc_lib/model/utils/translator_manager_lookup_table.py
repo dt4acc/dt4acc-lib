@@ -11,6 +11,7 @@ class IdentityMapper:
 
     Needed to mark it in the data
     """
+
     pass
 
 
@@ -24,15 +25,17 @@ class PolynomCoefficients:
 # just marking it as being special
 @dataclass
 class TuneConversionCoefficients:
-    conversion : PolynomCoefficients
+    conversion: PolynomCoefficients
 
 
 @dataclass
 class TranslatorLookupTableElement:
     conversion_id: ConversionID
-    # Todo: this needs to be much more flexible
-    # But for the time being
-    conversion_info: Union[IdentityMapper, PolynomCoefficients, TuneConversionCoefficients]
+    # Warning: IdentityMapper must go last!
+    # otherwise it will get **always** instantiated
+    conversion_info: Union[
+        TuneConversionCoefficients, PolynomCoefficients, IdentityMapper
+    ]
 
 
 @dataclass
