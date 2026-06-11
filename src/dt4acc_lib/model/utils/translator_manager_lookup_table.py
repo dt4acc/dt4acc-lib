@@ -11,6 +11,7 @@ class IdentityMapper:
 
     Needed to mark it in the data
     """
+
     pass
 
 
@@ -21,10 +22,58 @@ class PolynomCoefficients:
     energy_dependent: bool
 
 
+@dataclass
+class CurvePoint:
+    """An interpolation point
+
+    Use a sequence of these to construct a curve
+    """
+
+    indep: float
+    dep: float
+
+
+@dataclass
+class Range:
+    min: float
+    max: float
+
+    def scale(self, value: float) -> float:
+        return (value - self.min) / (self.max - self.min)
+
+    def interpolate(self, lambda_: float):
+        """A value that is 0 at min and 1 at max"""
+        return self.min * (1 - lambda_) + self.max * lambda_
+
+
+@dataclass
+class MultiplyerScaledByEnergy:
+    """Data whose independent variable is the beam energy
+
+    The way how ALS does it
+
+    These data should be presumably calculatable to
+    only depend on the magnet currents
+
+    Calculation:
+
+    .. math::
+        s = \\frac{v - r_{min}} {r_{max} - r_{min}}
+
+    """
+
+    reference_multiplyer: float
+    "The multiplier to use for the reference energy"
+    reference_energy: float
+    "The energy the multiplier is valid without scale"
+    range: Range
+    scale_by_energy: Sequence[CurvePoint]
+
+
 # just marking it as being special
 @dataclass
 class TuneConversionCoefficients:
-    conversion : PolynomCoefficients
+    conversion: PolynomCoefficients
 
 
 @dataclass
@@ -32,7 +81,12 @@ class TranslatorLookupTableElement:
     conversion_id: ConversionID
     # Todo: this needs to be much more flexible
     # But for the time being
-    conversion_info: Union[IdentityMapper, PolynomCoefficients, TuneConversionCoefficients]
+    conversion_info: Union[
+        IdentityMapper,
+        PolynomCoefficients,
+        TuneConversionCoefficients,
+        MultiplyerScaledByEnergy,
+    ]
 
 
 @dataclass
