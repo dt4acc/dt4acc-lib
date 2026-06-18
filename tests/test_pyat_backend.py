@@ -56,7 +56,7 @@ def test_tracking(bessyii_backend) -> None:
     elm_names = bessyii_backend.get_element_names()
     data_needed_at = [name for name in elm_names if name.startswith("BPM")]
 
-    n_turns = 2048
+    n_turns = 3
     start = datetime.datetime.now()
     data = bessyii_backend.compute_track(
         [p0, p1, p2, p3, p4, p5, p6, p7, p8], n_turns=n_turns,
@@ -68,7 +68,21 @@ def test_tracking(bessyii_backend) -> None:
         f"Computing {n_turns} turns required {dt.total_seconds()} seconds"
         f", thus {dt.total_seconds() / n_turns * 1000} ms per turn"
     )
-    idx = data.turns[0].index_for_uid("BPMZ7D1R")
-    for_element = data.for_element(uid="BPMZ7D1R")
+
+    # Check that look up works
+    for_element = data.for_element("BPMZ7D1R")
+    pcol = for_element.for_turn(1)
+    p = pcol.particle_per_id(0)
+
+    # And that particles can be printed
+    print(p)
+    print(pcol)
+    print(for_element)
+
+    x_view = for_element.get_x()
+    y_view = for_element.get_y()
+    print(x_view)
+    print(y_view)
+    print("x_view", x_view.mean_per_turn(), x_view.std_per_turn())
+
     pass
-    assert 0

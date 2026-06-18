@@ -26,6 +26,9 @@ from dt4acc_lib.model.output.tune import Tune, Chromaticity
 from dt4acc_lib.model.output.twiss import Twiss, TwissAtPosition, TwissParameters
 
 from .model.calculation_states import CalculationStates as States
+from ..model.output.track import ParticleState, StatePerTurn, StatePerElement, ParticleStateCollection, StatesForTurns, \
+    StatePerElementPerTurn
+from ..model.output.track_as_np_wrapper import NPStatePerElementPerTurn, NPStatesForTurns
 from ..model.output.track import ParticleState, StatePerTurn, StatePerElement, ParticleStateCollection, StatesForTurns
 from dt4acc_lib.interfaces.backend.calculation_states import CalculationStates as States, CalculationStates
 
@@ -398,7 +401,7 @@ class SimulatorBackend(SimulatorBackendRW):
         ]
         return r
 
-    def compute_track(self, p0: Sequence[ParticleState], n_turns: int, data_needed_at: Sequence[str]) -> StatesForTurns:
+    def compute_track(self, p0: Sequence[ParticleState], n_turns: int, data_needed_at: Sequence[str]) -> NPStatesForTurns:
         # That should be really fast ... no need to go further if that
         # can not be achieved
 
@@ -412,10 +415,19 @@ class SimulatorBackend(SimulatorBackendRW):
         logger.warning(
             "Computing %d turns took %s", n_turns, dt
         )
+
+        return NPStatesForTurns(fill_turns_to_element(track_data, elem_uids))
+
         # return track_data
         track_data_model = fill_state_per_element(track_data, data_needed_at)
         return StatesForTurns(turns=track_data_model)
 
+
+def fill_turns_to_element(track_data: np.ndarray[float], elem_uids: Sequence[str]) -> Sequence[NPStatePerElementPerTurn]:
+    return [
+        NPStatePerElementPerTurn(observed_at_element, uid=uid)
+        for observed_at_element, uid in zip(track_data.transpose(2, 0, 1, 3), elem_uids)
+    ]
 
 def fill_state_per_element(track_data, elm_uids: Sequence[str]) -> Sequence[StatePerTurn]:
     # check the state, in a manner that documents the assumption
@@ -430,6 +442,13 @@ def fill_state_per_element(track_data, elm_uids: Sequence[str]) -> Sequence[Stat
     ]
 
 
+def fill_state_per_element_per_track(one_track_data, elm_uids: Sequence[str]) -> Sequence[StatePerElement]:
+    return [
+       StatePerElement(ParticleStateCollection([ParticleState.from_sequence(p) for p in p_for_particles]), uid)
+        for p_for_particles, uid in zip(one_track_data.transpose(2, 1, 0), elm_uids)
+    ]
+
+
 def rectify_uid_for_last_element_if_needed(uids: Sequence[str], copy=True) -> Sequence[str]:
     """
     """
@@ -440,11 +459,4 @@ def rectify_uid_for_last_element_if_needed(uids: Sequence[str], copy=True) -> Se
     return uids
 
 
-def fill_state_per_element_per_track(one_track_data, elm_uids: Sequence[str]) -> Sequence[StatePerElement]:
-    return [
-       StatePerElement(ParticleStateCollection([ParticleState.from_sequence(p) for p in p_for_particles]), uid)
-        for p_for_particles, uid in zip(one_track_data.transpose(2, 1, 0), elm_uids)
-    ]
-
-
-_all__ = ["SimulationBackend"]
+__all__ = ["SimulatorBackend"]

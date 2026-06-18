@@ -20,8 +20,12 @@ class ParticleState:
     dt: float
 
     @classmethod
+    def n_elements(cls) -> int:
+        return 6
+
+    @classmethod
     def from_sequence(cls, input: Sequence[float]):
-        assert len(input) == 6
+        assert len(input) == cls.n_elements()
         return cls(*input)
 
     def as_array(self):
