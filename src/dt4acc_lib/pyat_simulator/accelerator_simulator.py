@@ -19,6 +19,7 @@ from dt4acc_lib.interfaces.simulator.element import ElementInterface
 from dt4acc_lib.pyat_simulator.proxies.proxy_factory import ElementProxyFactory
 
 from ..model.output.survey import SurveyDataForElement
+from ..model.output.track import StatePerTurn
 
 logger = logging.getLogger("dt4acc_lib")
 
@@ -74,6 +75,13 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
 
     def get_survey(self) -> Sequence[SurveyDataForElement]:
         r = at.get_s_pos(self.acc)
+        return r
+
+    def track(self, p0, n_turns, data_needed_at_element_index: Sequence[int]):
+        r = at.tracking.lattice_track(
+            self.acc, p0, nturns=n_turns, refpts=data_needed_at_element_index, use_mp=True,
+
+        )
         return r
 
     def _find_by_uuid(self, uuid: str) -> list:

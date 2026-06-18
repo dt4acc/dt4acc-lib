@@ -6,7 +6,8 @@ Todo:
     On the other hand the accelerator simulator knows e.g.: typically if twiss
     is calculated, orbit is calculated anyway.
 """
-
+import time
+from copy import copy as _copy
 import logging
 import math
 import threading
@@ -24,6 +25,8 @@ from dt4acc_lib.model.output.survey import SurveyDataForElement
 from dt4acc_lib.model.output.tune import Tune, Chromaticity
 from dt4acc_lib.model.output.twiss import Twiss, TwissAtPosition, TwissParameters
 
+from .model.calculation_states import CalculationStates as States
+from ..model.output.track import ParticleState, StatePerTurn, StatePerElement, ParticleStateCollection, StatesForTurns
 from dt4acc_lib.interfaces.backend.calculation_states import CalculationStates as States, CalculationStates
 
 logger = logging.getLogger()
@@ -394,6 +397,54 @@ class SimulatorBackend(SimulatorBackendRW):
             for name, uid, s  in zip(elm_names, elm_uids, s_pos)
         ]
         return r
+
+    def compute_track(self, p0: Sequence[ParticleState], n_turns: int, data_needed_at: Sequence[str]) -> StatesForTurns:
+        # That should be really fast ... no need to go further if that
+        # can not be achieved
+
+        elem_uids = self.get_element_uids()
+        indices = [idx for idx, uid in enumerate(elem_uids) if uid in data_needed_at]
+        p0 = np.array([p.as_array() for p in p0]).transpose()
+        start = time.time()
+        track_data, info, loss_map = self.acc.track(p0, n_turns=n_turns, data_needed_at_element_index=indices)
+        end = time.time()
+        dt = end - start
+        logger.warning(
+            "Computing %d turns took %s", n_turns, dt
+        )
+        # return track_data
+        track_data_model = fill_state_per_element(track_data, data_needed_at)
+        return StatesForTurns(turns=track_data_model)
+
+
+def fill_state_per_element(track_data, elm_uids: Sequence[str]) -> Sequence[StatePerTurn]:
+    # check the state, in a manner that documents the assumption
+    n_state_elms, n_particles, per_n_elems, n_turns = track_data.shape
+
+    # That is the assumption for now: for each element there is data
+    assert len(elm_uids) == per_n_elems
+
+    return [
+        StatePerTurn(fill_state_per_element_per_track(track, elm_uids))
+        for track in track_data.transpose(3, 0, 1, 2)
+    ]
+
+
+def rectify_uid_for_last_element_if_needed(uids: Sequence[str], copy=True) -> Sequence[str]:
+    """
+    """
+    if uids[0] == uids[-1]:
+        if copy:
+            uids = _copy(uids)
+        uids[-1] = uids[-1] + "_same_pos_as_start"
+    return uids
+
+
+def fill_state_per_element_per_track(one_track_data, elm_uids: Sequence[str]) -> Sequence[StatePerElement]:
+    return [
+       StatePerElement(ParticleStateCollection([ParticleState.from_sequence(p) for p in p_for_particles]), uid)
+        for p_for_particles, uid in zip(one_track_data.transpose(2, 1, 0), elm_uids)
+    ]
 
 
 _all__ = ["SimulationBackend"]
