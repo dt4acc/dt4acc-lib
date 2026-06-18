@@ -32,9 +32,6 @@ from ..model.output.track_as_np_wrapper import NPStatePerElementPerTurn, NPState
 from dt4acc_lib.interfaces.backend.calculation_states import CalculationStates as States, CalculationStates
 from .model.calculation_states import CalculationStates as States
 from ..model.output.track import ParticleState, StatePerTurn, StatePerElement, ParticleStateCollection, StatesForTurns
-from dt4acc_lib.pyat_simulator import utils
-from ..model.output.track import ParticleState, StatePerTurn, StatePerElement, ParticleStateCollection, StatesForTurns
-from dt4acc_lib.interfaces.backend.calculation_states import CalculationStates as States, CalculationStates
 
 logger = logging.getLogger()
 
@@ -405,7 +402,7 @@ class SimulatorBackend(SimulatorBackendRW):
         ]
         return r
 
-    def compute_track(self, p0: Sequence[ParticleState], n_turns: int, data_needed_at: Sequence[str]) -> StatesForTurns:
+    def compute_track(self, p0: Sequence[ParticleState], n_turns: int, data_needed_at: Sequence[str]) -> NPStatesForTurns:
         # That should be really fast ... no need to go further if that
         # can not be achieved
 
@@ -463,11 +460,4 @@ def rectify_uid_for_last_element_if_needed(uids: Sequence[str], copy=True) -> Se
     return uids
 
 
-def fill_state_per_element_per_track(one_track_data, elm_uids: Sequence[str]) -> Sequence[StatePerElement]:
-    return [
-       StatePerElement(ParticleStateCollection([ParticleState.from_sequence(p) for p in p_for_particles]), uid)
-        for p_for_particles, uid in zip(one_track_data.transpose(2, 1, 0), elm_uids)
-    ]
-
-
-_all__ = ["SimulationBackend"]
+__all__ = ["SimulatorBackend"]
