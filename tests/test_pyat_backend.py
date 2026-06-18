@@ -4,6 +4,7 @@ from importlib import resources
 import numpy as np
 import pytest
 
+from dt4acc.custom_facility.bessyii.run_bessyii_twin import bessyii_pyat_lattice
 from dt4acc.custom_facility.bessyii.provide_lattice import bessyii_pyat_lattice
 from dt4acc_lib.model.output.track import ParticleState
 from dt4acc_lib.pyat_simulator.accelerator_simulator import PyATAcceleratorSimulator

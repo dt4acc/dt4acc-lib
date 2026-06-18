@@ -83,6 +83,13 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
         )
         return r
 
+    def track(self, p0, n_turns, data_needed_at_element_index: Sequence[int]):
+        r = at.tracking.lattice_track(
+            self.acc, p0, nturns=n_turns, refpts=data_needed_at_element_index, use_mp=True,
+
+        )
+        return r
+
     def _find_by_uuid(self, uuid: str) -> list:
         """Find element(s) by UUID (SOLEIL) or FamName (MAX IV). Returns [] if not found."""
         matches = [e for e in self.acc if getattr(e, "UUID", None) == uuid]
