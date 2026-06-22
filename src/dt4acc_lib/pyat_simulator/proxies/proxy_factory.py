@@ -1,4 +1,4 @@
-from typing import Dict, Sequence
+from typing import Dict, Sequence, Callable, Tuple
 
 import at
 
@@ -22,6 +22,9 @@ class ElementProxyFactory:
         if elem_props_lut is None:
             elem_props_lut = create_at_properties_lut_per_element_cls()
         self.elem_props_lut = elem_props_lut
+        # I assume for today that (reference) energy of the lattice
+        # can change any time. So whenever needed, retrieve it
+        self.get_reference_energy = get_reference_energy
 
     def __str__(self):
         return f"{self.__class__.__name__}(" f"elem_props_lut={self.elem_props_lut}" ")"
@@ -42,7 +45,8 @@ class ElementProxyFactory:
         """
         prop_lut = self.elem_props_lut[obj.__class__.__name__]
         r = PropertiesProxy(
-            obj, properties_lut=prop_lut, element_id=element_id, name=name
+            obj, properties_lut=prop_lut, element_id=element_id, name=name,
+            get_reference_energy=self.get_reference_energy
         )
         return r
 
