@@ -10,6 +10,7 @@ from ..element_properties.kick import XKick, YKick
 from ..element_properties.main_strength import (
     MainStrengthForQuadrupole,
     MainStrengthForSextupole,
+    MainStrengthForOctupole,
     MainStrengthForDipole,
 )
 from ..element_properties.multipole import Multipole, NormalSkew
@@ -89,7 +90,7 @@ def at_element_properties_lut() -> Dict[str, Sequence[ElementPropertyInterface]]
         #       H? value too
         at.Sextupole.__name__:  [MainStrengthForSextupole()] + all_magnets_properties,
         at.Multipole.__name__:  all_magnets_properties,
-        at.Octupole.__name__:   all_magnets_properties,  # SOLEIL octupoles are at.Octupole
+        at.Octupole.__name__:   [MainStrengthForOctupole()] +  all_magnets_properties,  # SOLEIL octupoles are at.Octupole
         at.RFCavity.__name__:   [Frequency(), Voltage()] + geometric_properties,
     }
     return r

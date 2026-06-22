@@ -8,7 +8,7 @@ Todo:
 import numpy as np
 
 from .element_property_interface import ElementPropertyInterface
-from .utils import estimate_dipole_main_field
+from .utils import estimate_dipole_main_field, update_magnetic_polynom_coefficients
 
 
 class MainStrengthForQuadrupole(ElementPropertyInterface):
@@ -43,6 +43,26 @@ class MainStrengthForSextupole(ElementPropertyInterface):
         r = float(obj.H)
         #: Todo put this into a test
         assert np.isclose(r, obj.PolynomB[2], rtol=1e-12, atol=1e-12)
+        return r
+
+
+class MainStrengthForOctupole(ElementPropertyInterface):
+    """
+    Todo:
+        find out if there is also some parameter like K or H
+    """
+    def handles_property(self) -> str:
+        return "main_strength"
+
+    async def update(self, obj, value: float):
+        #: Todo put this into a test
+        new_poly = update_magnetic_polynom_coefficients(obj.PolynomB, {4: value})
+        obj.PolynomB[:] = new_poly
+
+        assert np.isclose(value, obj.PolynomB[3], rtol=1e-12, atol=1e-12)
+
+    def peek(self, obj) -> float:
+        r = float(obj.PolynomB[3])
         return r
 
 
