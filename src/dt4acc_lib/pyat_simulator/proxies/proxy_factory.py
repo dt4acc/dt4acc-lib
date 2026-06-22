@@ -18,7 +18,7 @@ from ...interfaces.simulator.element import ElementInterface
 
 
 class ElementProxyFactory:
-    def __init__(self, elem_props_lut=None):
+    def __init__(self, *, get_reference_energy: Callable[[], float], elem_props_lut=None):
         if elem_props_lut is None:
             elem_props_lut = create_at_properties_lut_per_element_cls()
         self.elem_props_lut = elem_props_lut
