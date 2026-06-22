@@ -5,6 +5,8 @@ Todo:
     should map to "B4" directly
 
 """
+from typing import Callable
+
 import numpy as np
 
 from .element_property_interface import ElementPropertyInterface
@@ -67,8 +69,15 @@ class MainStrengthForOctupole(ElementPropertyInterface):
 
 
 class MainStrengthForDipole(ElementPropertyInterface):
+    def __init__(self):
+        super().__init__()
+        self.get_reference_energy : Callable[[], float] = None
+
     def __repr__(self):
         return f"{self.__class__.__name__}()"
+
+    def set_reference_energy_cb(self, cb: Callable[[], float]):
+        self.get_reference_energy = cb
 
     def handles_property(self) -> str:
         return "main_strength"
@@ -77,14 +86,16 @@ class MainStrengthForDipole(ElementPropertyInterface):
         raise NotImplementedError("Main strength for dipole not handled")
 
     def peek(self, obj) -> object:
-        # the beam energy is not necessarily part of the dipole object
-        # todo: add appropriate logging or error messages
-        beam_energy = obj.Energy
+        """estimate dipole field from energy and stored polynom B value"""
+        assert self.get_reference_energy is not None
+        beam_energy = self.get_reference_energy()
         r = estimate_dipole_main_field(
             beam_energy=beam_energy,
             dipole_angle=obj.BendingAngle,
             path_length=obj.Length,
         )
+        # Todo: should the field PolynomB be added
+        r = r + obj.PolynomB[0]
         return r
 
 
