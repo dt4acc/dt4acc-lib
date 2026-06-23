@@ -40,3 +40,20 @@ class SimulatorBackendRW(BackendRW, metaclass=ABCMeta):
     async def reset(self):
         """Reset the simulation back end """
         raise NotImplementedError("use base class instead")
+
+    @abstractmethod
+    async def acknowledge(self):
+        """Flag that error state hsa been received
+
+        Idea: user / calling side has safety that error will not pass unchecked
+
+        In error state the model will not accept changes. In this state it will
+        accept changes to its elements but not start recomputation
+
+        The state has to be reset before calculations can start again
+
+        Todo:
+            need to check if that setup is too fine grained
+        """
+
+        raise NotImplementedError("use base class instead")

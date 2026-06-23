@@ -195,12 +195,14 @@ class SimulatorBackend(SimulatorBackendRW):
             model=self.model,
             # fmt:off
             transitions=[
-                dict( trigger = "calculate" , source = States.pending   , dest = States.executing , before=self._clear_stored_results ),
-                dict( trigger = "finished"  , source = States.executing , dest = States.finished                                      ),
-                dict( trigger = "changed"   , source = States.finished  , dest = States.pending   , after=self._clear_stored_results  ),
-                dict( trigger = "changed"   , source = States.pending   , dest = States.pending   , after=self._clear_stored_results  ),
-                dict( trigger = "clear"     , source = States.error     , dest = States.pending                                       ),
-                dict( trigger = "error"     , source = "*"              , dest = States.error                                         ),
+                dict( trigger = "calculate"   , source = States.pending      , dest = States.executing    , before=self._clear_stored_results ),
+                dict( trigger = "finished"    , source = States.executing    , dest = States.finished                                         ),
+                dict( trigger = "changed"     , source = States.finished     , dest = States.pending      , after=self._clear_stored_results  ),
+                dict( trigger = "changed"     , source = States.pending      , dest = States.pending      , after=self._clear_stored_results  ),
+                dict( trigger = "acknowledge" , source = States.error        , dest = States.acknowledged , after=self._clear_stored_results  ),
+                dict( trigger = "clear"       , source = States.error        , dest = States.pending                                          ),
+                dict( trigger = "clear"       , source = States.acknowledged , dest = States.pending                                          ),
+                dict( trigger = "error"       , source = "*"                 , dest = States.error                                            ),
             ],
             # fmt:on
             states=[st for st in States],
@@ -227,12 +229,29 @@ class SimulatorBackend(SimulatorBackendRW):
             self._clear_stored_results()
             if self.model.is_error():
                 self.model.clear()
+            elif self.model.is_acknowledged():
+                self.model.clear()
             elif not self.model.is_pending():
                 self.model.changed()
+            else:
+                # Todo: what to do in this case?
+                pass
             # Todo: find out where element names are added
             self.elem_uids = None
             self.elem_names = None
-            self.acc.reinit()
+
+    async def reinit(self):
+        """
+
+        Todo:
+            Should it automatically call reset?
+            Most probably yes
+        """
+        self.acc.reinit()
+        self.reset()
+
+    async def acknowledge(self):
+        self.model.acknowledge()
 
     async def trigger(self, dev_id: str, prop_id: str):
         self.logger.info(
@@ -262,7 +281,10 @@ class SimulatorBackend(SimulatorBackendRW):
                     f"SimulatorBackend is in error state — "
                     f"call Reset before writing ({dev_id}.{prop_id})"
                 )
-            self.model.changed()
+            if not self.model.is_acknowledged():
+                # if in acknowledged mode: user / higher layer needs to reset
+                # it actively
+                self.model.changed()
             elem = self.acc.get(dev_id)
             r = await elem.update(property_id=prop_id, value=value)
         return r
