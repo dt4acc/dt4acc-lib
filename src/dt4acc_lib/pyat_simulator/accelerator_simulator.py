@@ -8,15 +8,19 @@ Uses ElementProxyFactory (new property proxy architecture) for all standard
 AT element classes. Compound element IDs (e.g. "CQLN:<host_uuid>") are still
 resolved via ADDON_PROXY_REGISTRY for correctors living on a host element.
 """
+import logging
 from typing import Sequence
 
 import at
 import copy
-from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface
+
+from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface, OpticsCalculationError
 from dt4acc_lib.interfaces.simulator.element import ElementInterface
 from dt4acc_lib.pyat_simulator.proxies.proxy_factory import ElementProxyFactory
 
 from ..model.output.survey import SurveyDataForElement
+
+logger = logging.getLogger("dt4acc_lib")
 
 
 class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
@@ -45,7 +49,18 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
     def get_optics_parameters(self):
         assert self.acc is not None, \
             f"{self.__class__.__name__} is not properly initialised"
-        x0, ring_pars, elem_data = self.acc.get_optics(at.All)
+        try:
+            x0, ring_pars, elem_data = self.acc.get_optics(at.All)
+        except ValueError as ve:
+            # Assuming that ValueError means that optics calculation failed
+            #
+            # log only on info: optics calculation failure is not so uncommon
+            logger.info(
+                f"{self.__class__.__name__}.get_optics_parameters"
+                f" {self.acc} get_optics returned: {ve}"
+                " raising OpticsCalculationError"
+            )
+            raise OpticsCalculationError("Failed to calculate optics parameters") from ve
         return x0, ring_pars, elem_data
 
     def get_survey(self) -> Sequence[SurveyDataForElement]:

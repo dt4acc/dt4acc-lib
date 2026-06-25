@@ -10,19 +10,22 @@ Todo:
 import logging
 import math
 import threading
-from typing import Sequence
+from typing import Any, Dict, Sequence, Union, Tuple
 
+import numpy as np
 from transitions import Machine
 
 from dt4acc_lib.interfaces.backend.backend import SimulatorBackendRW
-from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface
+from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface, OpticsCalculationError, \
+    OpticsCalculationProhibitedError
 from dt4acc_lib.interfaces.simulator.result_element import ResultElement
 from dt4acc_lib.model.output.calculated_track import CalculatedTrack, CalculatedPosition
 from dt4acc_lib.model.output.survey import SurveyDataForElement
 from dt4acc_lib.model.output.tune import Tune, Chromaticity
 from dt4acc_lib.model.output.twiss import Twiss, TwissAtPosition, TwissParameters
 
-from .model.calculation_states import CalculationStates as States
+from dt4acc_lib.interfaces.backend.calculation_states import CalculationStates as States, CalculationStates
+from dt4acc_lib.pyat_simulator import utils
 
 logger = logging.getLogger()
 
@@ -46,9 +49,11 @@ class TrackElement(ResultElement):
     def __init__(self, backend):
         self.backend = backend
 
-    def get(self, prop_id: str) -> CalculatedTrack:
+    def get(self, prop_id: str) -> Union[CalculatedTrack, None]:
         names, uuids, optics_parameters = self.backend.get_optics()
-        _, ring_pars, elem_data =  optics_parameters
+        if optics_parameters is None:
+            return None
+        _, ring_pars, elem_data = optics_parameters
         r =  CalculatedTrack(
             track=[
                 CalculatedPosition(fam_name=name, uid=uid, x=state[0], y=state[2])
@@ -63,8 +68,10 @@ class TwissElement(ResultElement):
     def __init__(self, backend):
         self.backend = backend
 
-    def get(self, prop_id: str) -> Twiss:
+    def get(self, prop_id: str) -> Union[Twiss, None]:
         fam_names, elem_uids, optics_parameters = self.backend.get_optics()
+        if optics_parameters is None:
+            return None
         _, ring_pars, elem_data =  optics_parameters
         r = Twiss(
             twiss=[
@@ -90,9 +97,11 @@ class TuneElement(ResultElement):
     def __init__(self, backend):
         self.backend = backend
 
-    def get(self, prop_id: str) -> Tune:
+    def get(self, prop_id: str) -> Union[Tune, None]:
         assert prop_id == "transversal", f"Only prepared to handle transversal tune but got {prop_id}"
         _, __, optics_parameters = self.backend.get_optics()
+        if optics_parameters is None:
+            return None
         _, ring_pars, __ = optics_parameters
         tune = ring_pars["tune"]
         return Tune(x=tune[0], y=tune[1])
@@ -166,6 +175,8 @@ class SimulatorBackend(SimulatorBackendRW):
     Todo:
         * where to break async / sync or threaded approach?
         * calculation lock: defaults to a threading.lock
+        * review that state transitions are all delegated to the
+          state engine as appropriate
     """
 
     def __init__(
@@ -217,6 +228,9 @@ class SimulatorBackend(SimulatorBackendRW):
             twiss=TwissElement(backend=self),
             survey=SurveyElement(backend=self),
         )
+
+    def get_state(self) -> CalculationStates:
+        return CalculationStates(self.state.model.state)
 
     def _clear_stored_results(self):
         self.optics = None
@@ -277,7 +291,7 @@ class SimulatorBackend(SimulatorBackendRW):
             # Guard against error state — changed() is only valid from
             # finished or pending. If in error, reject the set.
             if self.model.is_error():
-                raise ValueError(
+                raise OpticsCalculationProhibitedError(
                     f"SimulatorBackend is in error state — "
                     f"call Reset before writing ({dev_id}.{prop_id})"
                 )
@@ -299,18 +313,29 @@ class SimulatorBackend(SimulatorBackendRW):
             Review when an other backend is needed
         """
         self._calculate_optics_if_required()
-        assert self.optics is not None, "expected some optics stored, but only found None"
         elem_names = self.get_element_names()
         uids = self.get_element_uids()
+
+        if self.model.is_error() or self.model.is_acknowledged():
+            # No optics data expected in this mode
+            # Todo: should one raise an exception if in error?
+            return elem_names, uids, None
+        assert self.optics is not None, "expected some optics stored, but only found None"
         return elem_names, uids, self.optics
 
     def _calculate_optics_if_required(self):
         with self.calculation_lock:
+            if self.model.is_acknowledged():
+                logger.warning(
+                    "Calculation of optics required, but in acknowledge mode,"
+                    " need to be reset before it will calculate again")
+                return
+
             if self.model.is_pending():
                 self._calculate_optics()
             assert (
-                self.model.is_finished()
-            ), f"expected to be in finished state, but I am in {self.model.state}"
+                self.model.is_finished() or self.model.is_error()
+            ), f"expected to be in finished or error state, but I am in {self.model.state}"
 
     def _calculate_optics(self):
         """
@@ -325,6 +350,14 @@ class SimulatorBackend(SimulatorBackendRW):
         try:
             optics = self.acc.get_optics_parameters()
             self.model.finished()
+        except OpticsCalculationError as oe:
+            # Unfortunately a not more precise error
+            # for the time being I have to assume that
+            # it means no closed orbit was found
+            self.model.error()
+            logger.error(f"{self.__class__.__name__}: optics calculation failed {oe}")
+            return None
+
         except Exception as exc:
             self.model.error()
             raise exc

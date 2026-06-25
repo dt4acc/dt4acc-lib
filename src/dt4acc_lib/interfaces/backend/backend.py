@@ -7,6 +7,8 @@ Why: there is not always a direct mapping from one
 """
 from abc import ABCMeta, abstractmethod
 
+from dt4acc_lib.interfaces.backend.calculation_states import CalculationStates
+
 
 class BackendR(metaclass=ABCMeta):
     """ """
@@ -35,7 +37,18 @@ class SimulatorBackendRW(BackendRW, metaclass=ABCMeta):
 
     Todo:
         revisit if that is not the case ....
+
+        Are these method better implemented by dedicated
+        messages?
+
+        Think in the way like SCPI interacts with a device?
+        Set something that peek for its status ....
+
     """
+    @abstractmethod
+    def get_state(self) -> CalculationStates:
+        raise NotImplementedError("use base class instead")
+
     @abstractmethod
     async def reset(self):
         """Reset the simulation back end """
