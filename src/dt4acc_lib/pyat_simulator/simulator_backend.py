@@ -29,6 +29,8 @@ from .model.calculation_states import CalculationStates as States
 from ..model.output.track import ParticleState, StatePerTurn, StatePerElement, ParticleStateCollection, StatesForTurns, \
     StatePerElementPerTurn
 from ..model.output.track_as_np_wrapper import NPStatePerElementPerTurn, NPStatesForTurns
+from dt4acc_lib.interfaces.backend.calculation_states import CalculationStates as States, CalculationStates
+from dt4acc_lib.pyat_simulator import utils
 from ..model.output.track import ParticleState, StatePerTurn, StatePerElement, ParticleStateCollection, StatesForTurns
 from dt4acc_lib.interfaces.backend.calculation_states import CalculationStates as States, CalculationStates
 
