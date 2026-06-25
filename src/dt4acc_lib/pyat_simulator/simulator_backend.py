@@ -25,7 +25,6 @@ from dt4acc_lib.model.output.tune import Tune, Chromaticity
 from dt4acc_lib.model.output.twiss import Twiss, TwissAtPosition, TwissParameters
 
 from dt4acc_lib.interfaces.backend.calculation_states import CalculationStates as States, CalculationStates
-from dt4acc_lib.pyat_simulator import utils
 
 logger = logging.getLogger()
 
