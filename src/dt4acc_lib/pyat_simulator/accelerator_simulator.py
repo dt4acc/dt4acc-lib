@@ -80,7 +80,6 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
     def track(self, p0, n_turns, data_needed_at_element_index: Sequence[int]):
         r = at.tracking.lattice_track(
             self.acc, p0, nturns=n_turns, refpts=data_needed_at_element_index, use_mp=True,
-
         )
         return r
 
