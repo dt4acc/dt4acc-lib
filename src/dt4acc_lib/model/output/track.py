@@ -16,8 +16,8 @@ class ParticleState:
     px: float
     y: float
     py: float
-    dp: float
-    dt: float
+    delta: float
+    ct: float
 
     @classmethod
     def n_elements(cls) -> int:
@@ -29,7 +29,10 @@ class ParticleState:
         return cls(*input)
 
     def as_array(self):
-        return np.array([self.x, self.px, self.y, self.py, self.dp, self.dt], dtype=float)
+        return np.array(
+            [self.x, self.px, self.y, self.py, self.delta, self.ct],
+            dtype=float
+        )
 
 
 @dataclass

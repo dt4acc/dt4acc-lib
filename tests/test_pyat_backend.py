@@ -4,7 +4,7 @@ from importlib import resources
 import numpy as np
 import pytest
 
-from dt4acc.custom_facility.bessyii.run_bessyii_twin import bessyii_pyat_lattice
+from dt4acc.custom_facility.bessyii.provide_lattice import bessyii_pyat_lattice
 from dt4acc_lib.model.output.track import ParticleState
 from dt4acc_lib.pyat_simulator.accelerator_simulator import PyATAcceleratorSimulator
 from dt4acc_lib.pyat_simulator.simulator_backend import SimulatorBackend
@@ -34,9 +34,9 @@ def test_tracking(bessyii_backend) -> None:
         [0] * 6
     )
     p1 = ParticleState.from_sequence([0] * 6)
-    p1.dp = 1e-6
+    p1.delta = 1e-6
     p2 = ParticleState.from_sequence([0] * 6)
-    p2.dt = 1e-8
+    p2.ct = 1e-8
     p3 = ParticleState.from_sequence([0] * 6)
     p3.x = 1e-8
     p4 = ParticleState.from_sequence([0] * 6)

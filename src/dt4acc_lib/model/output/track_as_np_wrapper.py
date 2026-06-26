@@ -22,8 +22,8 @@ class StateComponentIndex(Enum):
     dx = 1
     y = 2
     dy = 3
-    dp = 4
-    dt = 5
+    delta = 4
+    ct = 5
 
 
 class NPParticleState:
@@ -37,8 +37,8 @@ class NPParticleState:
             f", dx={self.dx}"
             f", y={self.y}"
             f", dy={self.dy}"
-            f", dp={self.dp}"
-            f", dt={self.dt}"
+            f", delta={self.delta}"
+            f", ct={self.ct}"
             ")"
         )
 
@@ -63,12 +63,12 @@ class NPParticleState:
         return self.state[StateComponentIndex.dy.value]
 
     @property
-    def dp(self) -> float:
-        return self.state[StateComponentIndex.dp.value]
+    def delta(self) -> float:
+        return self.state[StateComponentIndex.delta.value]
 
     @property
-    def dt(self) -> float:
-        return self.state[StateComponentIndex.dt.value]
+    def ct(self) -> float:
+        return self.state[StateComponentIndex.ct.value]
 
 
 class NPParticleCollection:
