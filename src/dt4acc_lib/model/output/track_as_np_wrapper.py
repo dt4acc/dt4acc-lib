@@ -118,8 +118,25 @@ class NPViewForStateComponent:
             f", view={self.view}"
             f", n_turns={self.n_turns}"
             f", n_particles={self.n_particles}"
+            ", track=("
+            f"mean={self.mean_per_turn().mean()}"
+            f", std={self.std_per_turn().std()})"
+            f", min={self.min_per_turn().min()})"
+            f", max={self.max_per_turn().max()})"
+            ")"
             ")"
         )
+
+    def __str__(self):
+        return (
+            f"{self.__class__.__name__}("
+            f"element_uid={self.uid}"
+            f", view={self.view}"
+            f", n_turns={self.n_turns}"
+            f", n_particles={self.n_particles}"
+            ")"
+        )
+
 
     def mean_per_turn(self):
         return self.track_data.mean(axis=0)
@@ -129,6 +146,12 @@ class NPViewForStateComponent:
 
     def variance_per_turn(self):
         return self.track_data.var(axis=0)
+
+    def min_per_turn(self):
+        return self.track_data.min(axis=0)
+
+    def max_per_turn(self):
+        return self.track_data.max(axis=0)
 
 
 class NPStatePerElementPerTurn:

@@ -56,7 +56,7 @@ def test_tracking(bessyii_backend) -> None:
     elm_names = bessyii_backend.get_element_names()
     data_needed_at = [name for name in elm_names if name.startswith("BPM")]
 
-    n_turns = 3
+    n_turns = 256
     start = datetime.datetime.now()
     data = bessyii_backend.compute_track(
         [p0, p1, p2, p3, p4, p5, p6, p7, p8], n_turns=n_turns,
@@ -82,7 +82,12 @@ def test_tracking(bessyii_backend) -> None:
     x_view = for_element.get_x()
     y_view = for_element.get_y()
     print(x_view)
+    print(repr(x_view))
     print(y_view)
-    print("x_view", x_view.mean_per_turn(), x_view.std_per_turn())
+    print(repr(y_view))
+
+    # just check that the call does not fail for now
+    x_view.mean_per_turn()
+    x_view.std_per_turn()
 
     pass
