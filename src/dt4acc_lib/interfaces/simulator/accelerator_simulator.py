@@ -12,6 +12,20 @@ from .element import ElementInterface
 from ...model.output.survey import SurveyDataForElement
 
 
+class OpticsCalculationError(Exception):
+   """Failed to calculate optics parameters.
+   """
+
+class OpticsCalculationProhibitedError(Exception):
+    """Calculation of optics failed already
+
+    state engine need to be reset (and properly some actor values)
+    before starting calculation again
+
+    Todo:
+        necessary to distinquish between the two errors?
+    """
+
 class AcceleratorSimulatorInterface(metaclass=ABCMeta):
     """
 
