@@ -26,10 +26,6 @@ from dt4acc_lib.model.output.survey import SurveyDataForElement
 from dt4acc_lib.model.output.tune import Tune, Chromaticity
 from dt4acc_lib.model.output.twiss import Twiss, TwissAtPosition, TwissParameters
 
-from .model.calculation_states import CalculationStates as States
-from ..model.output.track import ParticleState, StatePerTurn, StatePerElement, ParticleStateCollection, StatesForTurns, \
-    StatePerElementPerTurn
-from ..model.output.track_as_np_wrapper import NPStatePerElementPerTurn, NPStatesForTurns
 from dt4acc_lib.interfaces.backend.calculation_states import CalculationStates as States, CalculationStates
 from .model.calculation_states import CalculationStates as States
 from ..model.output.track import ParticleState, StatePerTurn, StatePerElement, ParticleStateCollection, StatesForTurns, \
