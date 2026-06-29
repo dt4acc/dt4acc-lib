@@ -36,8 +36,17 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
         self.acc_orig_store = copy.deepcopy(at_lattice)
         self.acc = None
         self.reinit()
+
+        # Todo: address proper Energy handling
+        #       need to find out how energy is handled within pyat
+        #       * is it the reference energy the lattice was designed for?
+        #       * the reference energy of the reference particle
+        #       * how is it changed and how is that traced?
+        def retrieve_energy() -> float:
+            return self.acc.energy
+
         if proxy_factory is None:
-            proxy_factory = ElementProxyFactory()
+            proxy_factory = ElementProxyFactory(get_reference_energy=retrieve_energy)
         self.proxy_factory = proxy_factory
 
     def __repr__(self) -> str:
