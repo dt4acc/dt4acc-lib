@@ -261,7 +261,7 @@ class SimulatorBackend(SimulatorBackendRW):
             Most probably yes
         """
         self.acc.reinit()
-        self.reset()
+        await self.reset()
 
     async def acknowledge(self):
         self.model.acknowledge()
