@@ -56,8 +56,7 @@ jobs:
 
       - name: install
         run: |
-          # listing a non existing directory fails ..
-          python -m pip install wheel/dt4acc_lib*.whl
+          python -m pip install ./[test]
 
       - name: Lint with flake8
         run: |
