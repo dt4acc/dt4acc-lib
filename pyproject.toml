@@ -34,11 +34,10 @@ packages = ["src/dt4acc_lib"]
 
 [tool.hatch.build]
 dev-mode-dirs = ["src"]
-
-[tool.hatch.build]
 include = [
     "CHANGELOG.md",
 ]
+
 [project.urls]
 Homepage = "https://github.com/dt4acc/dt4acc-lib"
 Documentation = "https://github.com/dt4acc/dt4acc-lib"
