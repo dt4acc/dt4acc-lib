@@ -4,11 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dt4acc-lib"
-version = "0.4.2"
+version = "0.4.3"
 description = "digital twin for accelerators: library part"
 authors = [
   { name = "Waheedullah Sulaiman Khail" },
   { name = "Pierre Schnizer" },
+  { name = "Guillaume Pichon" }
 ]
 license = { text = "GPL-3.0" }
 requires-python = ">=3.7"
@@ -33,7 +34,9 @@ packages = ["src/dt4acc_lib"]
 
 [tool.hatch.build]
 dev-mode-dirs = ["src"]
-
+include = [
+    "CHANGELOG.md",
+]
 
 [project.urls]
 Homepage = "https://github.com/dt4acc/dt4acc-lib"
