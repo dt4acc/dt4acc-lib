@@ -17,6 +17,22 @@ from dt4acc_lib.pyat_simulator.element_properties.multipole import (
 )
 
 
+@pytest.fixture(scope="module")
+def get_reference_energy():
+    def actual_energy():
+        return 4.2e9
+    return actual_energy
+
+
+@pytest.fixture(scope="function")
+def element_proxy_factory(get_reference_energy):
+    """
+    Warning:
+            this mock up is only good enough if energy is not really used
+    """
+    return ElementProxyFactory(get_reference_energy=get_reference_energy)
+
+
 def test_at_proxy_instantiation():
     """Just see that instaniation works"""
     lut = create_at_properties_lut_per_element_cls()
@@ -28,10 +44,9 @@ def test_at_proxy_instantiation():
             repr(handler)
 
 
-def test_sextupole_properties():
-    f = ElementProxyFactory()
+def test_sextupole_properties(element_proxy_factory):
     s = at.Sextupole(family_name="sext_tst", length=0.25)
-    proxy = f.get_proxy(s, element_id="test_id")
+    proxy = element_proxy_factory.get_proxy(s, element_id="test_id")
 
     H = 123
     val = proxy.peek("main_strength")
@@ -53,20 +68,20 @@ def test_sextupole_properties():
     assert val == pytest.approx(0, abs=1e-12, rel=1e-12)
 
 
-def test_quadrupole_properties():
+def test_quadrupole_properties(element_proxy_factory):
     K = 123
     s = at.Quadrupole(family_name="quad_tst", length=0.335)
     s.update(K=K)
-    f = ElementProxyFactory()
+    f = element_proxy_factory
     proxy = f.get_proxy(s, element_id="test_id")
     val = proxy.peek("main_strength")
     assert val == pytest.approx(K, abs=1e-12, rel=1e-12)
 
 
 @pytest.mark.asyncio
-async def test_sextupole_update():
+async def test_sextupole_update(element_proxy_factory):
     H = 272
-    f = ElementProxyFactory()
+    f = element_proxy_factory
     s = at.Sextupole(family_name="sext_tst", length=0.25)
     s.update(H=272)
     proxy = f.get_proxy(s, element_id="test_id")
@@ -90,9 +105,9 @@ async def test_sextupole_update():
 
 
 @pytest.mark.asyncio
-async def test_quadrupole_update():
+async def test_quadrupole_update(element_proxy_factory):
     K = 31.2
-    f = ElementProxyFactory()
+    f = element_proxy_factory
     s = at.Quadrupole(family_name="quad_tst", length=0.133, k=K)
     proxy = f.get_proxy(s, element_id="test_id")
 
@@ -148,7 +163,7 @@ async def test_multipole_update():
 
 
 @pytest.mark.asyncio
-async def test_kick_update():
+async def test_kick_update(element_proxy_factory):
     """
     Need to understand it
 
@@ -156,8 +171,8 @@ async def test_kick_update():
     """
     dx = 3.13e-4
     q = at.Quadrupole("quad_kick", 0.42, 27.2, KickAngle=[0, 0])
-    proxy_factory = ElementProxyFactory()
-    proxy = proxy_factory.get_proxy(q, element_id="quad_kick")
+    element_proxy_factory = element_proxy_factory
+    proxy = element_proxy_factory.get_proxy(q, element_id="quad_kick")
 
     val = proxy.peek("x_kick")
     assert val == pytest.approx(0, abs=1e-12, rel=1e-12)
@@ -185,11 +200,16 @@ async def test_dipole_update():
     todo:
         update it for a correct check
     """
+
     dip = at.Dipole("test_dipole", length=1.0, bending_angle=math.pi / 16.0)
     lat = at.Lattice([dip], energy=1.72e9)
+
+    def get_reference_energy():
+        return lat.energy
+
+    element_proxy_factory = ElementProxyFactory(get_reference_energy=get_reference_energy)
     # necessary so that the energy is stored in the dipole
     lat.enable_6d()
-    proxy_factory = ElementProxyFactory()
-    proxy = proxy_factory.get_proxy(dip, element_id="test_dipole")
+    proxy = element_proxy_factory.get_proxy(dip, element_id="test_dipole")
     main_field = proxy.peek("main_strength")
     assert main_field == pytest.approx(1.2, abs=0.1, rel=0)
