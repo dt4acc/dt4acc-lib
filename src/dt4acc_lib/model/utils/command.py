@@ -30,7 +30,7 @@ class Command:
     id: str
     property: str
     #: the object can not be deserialized need to be more precise here
-    value: Union[int, float]
+    value: Union[int, float, Sequence[Union[int, float]]]
     behaviour_on_error: BehaviourOnError
 
     @classmethod
