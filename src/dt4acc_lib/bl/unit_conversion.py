@@ -1,15 +1,16 @@
 import logging
+from typing import Sequence
 
 import numpy as np
-from typing import Sequence
+from scipy.interpolate import interp1d
+from scipy.constants import speed_of_light
+
 from dt4acc_lib.interfaces.utils.state_conversion import StateConversion
+from dt4acc_lib.model.utils.command import ReadCommand
 from dt4acc_lib.model.utils.translator_manager_lookup_table import (
     CurvePoint,
     MultiplyerScaledByEnergy,
 )
-from scipy.interpolate import interp1d
-
-from dt4acc_lib.model.utils.command import ReadCommand
 
 logger = logging.getLogger("dt4acc_lib")
 
