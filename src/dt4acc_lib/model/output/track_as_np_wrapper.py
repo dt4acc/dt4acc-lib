@@ -11,6 +11,7 @@ import numpy.typing as npt
 
 from .track import ParticleState
 
+
 class StateComponentIndex(Enum):
     """
     Todo:
@@ -137,21 +138,47 @@ class NPViewForStateComponent:
             ")"
         )
 
+    def nanmean_per_turn(self):
+        return np.nanmean(self.track_data, axis=0)
 
-    def mean_per_turn(self):
-        return self.track_data.mean(axis=0)
+    def nanstd_per_turn(self):
+        return np.nanstd(self.track_data, axis=0)
 
-    def std_per_turn(self):
-        return self.track_data.std(axis=0)
+    def nanvariance_per_turn(self):
+        return np.nanvar(self.track_data, axis=0)
 
-    def variance_per_turn(self):
-        return self.track_data.var(axis=0)
+    def nanmin_per_turn(self):
+        return np.nanmin(self.track_data, axis=0)
 
-    def min_per_turn(self):
-        return self.track_data.min(axis=0)
+    def nanmax_per_turn(self):
+        return np.nanmax(self.track_data, axis=0)
 
-    def max_per_turn(self):
-        return self.track_data.max(axis=0)
+
+class NPParticlesSurvived:
+    """To provide some estimate how many particles are still here
+    """
+    def __init__(self, track_data: npt.NDArray[np.float64], uid: str, view:str):
+        # Check shape
+        n_dims, n_particles, n_turns = track_data.shape
+        self.track_data = track_data
+        self.uid = uid
+        self.view = view
+
+    def __repr__(self):
+        n_dims, n_particles, n_turns = self.track_data.shape
+        return (
+            f"{self.__class__.__name__}("
+            f"uid={self.uid}"
+            f", n_turns={n_turns}"
+            f", n_particles={n_particles}"
+            ")"
+        )
+
+    def get_n_particles_survived_per_turn(self):
+        valid_data = np.isfinite(self.track_data)
+        valid_data = valid_data.all(axis=0)
+        n_particles = np.sum(valid_data, axis=0)
+        return n_particles
 
 
 class NPStatePerElementPerTurn:
@@ -189,6 +216,13 @@ class NPStatePerElementPerTurn:
     def get_y(self):
         return NPViewForStateComponent(
             track_data=self.track_data[StateComponentIndex.y.value,:,:], uid=self.uid, view="y"
+        )
+
+    def get_survived(self):
+        return NPParticlesSurvived(
+            track_data=self.track_data[[StateComponentIndex.x.value, StateComponentIndex.y.value], ...],
+            uid=self.uid,
+            view="survived"
         )
 
 
