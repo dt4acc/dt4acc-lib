@@ -78,10 +78,10 @@ def at_element_properties_lut() -> Dict[str, Sequence[ElementPropertyInterface]]
     #        How does it correspond to kick angles ?
     multipoles = [
         Multipole(normal_skew=NormalSkew.normal, n_multipole=n_mul)
-        for n_mul in range(2, 20)
+        for n_mul in range(1, 20)
     ] + [
         Multipole(normal_skew=NormalSkew.skew, n_multipole=n_mul)
-        for n_mul in range(2, 20)
+        for n_mul in range(1, 20)
     ]
     all_magnets_properties = multipoles + [XKick(), YKick()] + geometric_properties
     r = {
