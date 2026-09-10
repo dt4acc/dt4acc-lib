@@ -195,21 +195,30 @@ def test_dipole_field_from_electron_beam_energy():
 
 @pytest.mark.asyncio
 async def test_dipole_update():
-    """Check it for BESSY II parameters
-
-    todo:
-        update it for a correct check
-    """
-
+    """Writing the main field adjusts the bending angle at fixed energy."""
+    energy = 1.72e9
     dip = at.Dipole("test_dipole", length=1.0, bending_angle=math.pi / 16.0)
-    lat = at.Lattice([dip], energy=1.72e9)
-
-    def get_reference_energy():
-        return lat.energy
-
-    element_proxy_factory = ElementProxyFactory(get_reference_energy=get_reference_energy)
+    lat = at.Lattice([dip], energy=energy)
     # necessary so that the energy is stored in the dipole
     lat.enable_6d()
-    proxy = element_proxy_factory.get_proxy(dip, element_id="test_dipole")
+    dip.PolynomB[0] = 0.02
+    proxy_factory = ElementProxyFactory(get_reference_energy=lambda: energy)
+    proxy = proxy_factory.get_proxy(dip, element_id="test_dipole")
     main_field = proxy.peek("main_strength")
-    assert main_field == pytest.approx(1.2, abs=0.1, rel=0)
+    target_field = main_field + 0.001
+    dipole_offset = dip.PolynomB[0]
+
+    await proxy.update("main_strength", target_field)
+
+    expected_angle = (
+        (target_field - dipole_offset)
+        * speed_of_light
+        * dip.Length
+        / math.sqrt(energy**2 - (511e3)**2)
+    )
+    assert dip.BendingAngle == pytest.approx(expected_angle, abs=1e-12, rel=1e-12)
+    assert dip.PolynomB[0] == pytest.approx(dipole_offset, abs=1e-12, rel=1e-12)
+    assert proxy.peek("main_strength") == pytest.approx(
+        target_field, abs=1e-12, rel=1e-12
+    )
+    assert proxy.get_property_proxy("main_strength").get_reference_energy is None

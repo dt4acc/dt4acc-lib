@@ -8,6 +8,7 @@ Todo:
 from typing import Callable
 
 import numpy as np
+from scipy.constants import speed_of_light
 
 from .element_property_interface import ElementPropertyInterface
 from .utils import estimate_dipole_main_field, update_magnetic_polynom_coefficients
@@ -82,8 +83,16 @@ class MainStrengthForDipole(ElementPropertyInterface):
     def handles_property(self) -> str:
         return "main_strength"
 
-    async def update(self, obj, value: object):
-        raise NotImplementedError("Main strength for dipole not handled")
+    async def update(self, obj, value: float):
+        """Set the dipole field by adjusting its bending angle at fixed energy."""
+        assert self.get_reference_energy is not None
+
+        beam_energy = self.get_reference_energy()
+        electron_rest_energy = 511e3
+        momentum_over_c = np.sqrt(beam_energy**2 - electron_rest_energy**2)
+        field_from_angle = momentum_over_c / (speed_of_light * obj.Length)
+        bending_angle = (value - obj.PolynomB[0]) / field_from_angle
+        obj.update(BendingAngle=bending_angle)
 
     def peek(self, obj) -> object:
         """estimate dipole field from energy and stored polynom B value"""
