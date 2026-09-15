@@ -44,5 +44,12 @@ class YellowPages(YellowPagesBase):
         """
         return self.get("tune_correction_quadrupoles")
 
+    def cavity_names(self) -> Sequence[str]:
+        """
+        Todo:
+            remove me: favour to only provide the .get interface
+        """
+        return self.get("cavities")
+
 
 __all__ = ["FamilyName", "YellowPages"]
