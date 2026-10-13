@@ -11,7 +11,7 @@ import numpy as np
 from scipy.constants import speed_of_light
 
 from .element_property_interface import ElementPropertyInterface
-from .utils import estimate_dipole_main_field, update_magnetic_polynom_coefficients
+from .utils import energy_to_brho, estimate_dipole_main_field, update_magnetic_polynom_coefficients
 
 
 class MainStrengthForQuadrupole(ElementPropertyInterface):
@@ -88,8 +88,7 @@ class MainStrengthForDipole(ElementPropertyInterface):
         assert self.get_reference_energy is not None
 
         beam_energy = self.get_reference_energy()
-        electron_rest_energy = 511e3
-        momentum_over_c = np.sqrt(beam_energy**2 - electron_rest_energy**2)
+        momentum_over_c = energy_to_brho(beam_energy)
         field_from_angle = momentum_over_c / (speed_of_light * obj.Length)
         bending_angle = (value - obj.PolynomB[0]) / field_from_angle
         obj.update(BendingAngle=bending_angle)

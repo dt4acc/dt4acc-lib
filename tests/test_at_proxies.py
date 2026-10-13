@@ -5,6 +5,7 @@ import pytest
 from scipy.constants import speed_of_light
 
 from dt4acc_lib.pyat_simulator.element_properties.utils import (
+    energy_to_brho,
     estimate_dipole_main_field,
 )
 from dt4acc_lib.pyat_simulator.proxies.proxy_factory import (
@@ -214,7 +215,7 @@ async def test_dipole_update():
         (target_field - dipole_offset)
         * speed_of_light
         * dip.Length
-        / math.sqrt(energy**2 - (511e3)**2)
+        / energy_to_brho(energy)
     )
     assert dip.BendingAngle == pytest.approx(expected_angle, abs=1e-12, rel=1e-12)
     assert dip.PolynomB[0] == pytest.approx(dipole_offset, abs=1e-12, rel=1e-12)

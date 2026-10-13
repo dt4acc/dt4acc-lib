@@ -112,6 +112,26 @@ def update_magnetic_polynom_coefficients(
     return polynom
 
 
+def energy_to_brho(beam_energy: float, electron_rest_energy: float = 511e3) -> float:
+    """Magnetic rigidity (p*c, in eV) for a given beam energy.
+
+    Args:
+        beam_energy: in electron volts
+        electron_rest_energy: in electron volts
+
+    Warning: only valid for electrons (or any particle at the given
+    electron_rest_energy).
+    """
+    return np.sqrt(beam_energy**2 - electron_rest_energy**2)
+
+
+def brho_to_energy(brho: float, electron_rest_energy: float = 511e3) -> float:
+    """Inverse of :func:`energy_to_brho`: beam energy for a given magnetic
+    rigidity (p*c, in eV).
+    """
+    return np.sqrt(brho**2 + electron_rest_energy**2)
+
+
 def estimate_dipole_main_field(
         beam_energy: float,
         dipole_angle: float,
@@ -132,9 +152,8 @@ def estimate_dipole_main_field(
 
     Where did irho from Tracy go?
     """
-    electron_rest_energy = 511e3
     ratio = dipole_angle /  (speed_of_light * path_length)
-    E = np.sqrt(beam_energy**2 - electron_rest_energy**2)
+    E = energy_to_brho(beam_energy)
     r  = ratio * E
     return r
 
@@ -146,4 +165,6 @@ __all__ = [
     "update_shift",
     "update_magnetic_polynom_coefficients",
     "check_multipole_index",
+    "energy_to_brho",
+    "brho_to_energy",
 ]
