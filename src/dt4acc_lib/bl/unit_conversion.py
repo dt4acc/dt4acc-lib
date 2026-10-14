@@ -96,13 +96,25 @@ class LinearUnitConversion(StateConversion):
 
 class EnergyIndependentCurveUnitConversion(StateConversion):
     """
-    Interpolate a curve (independent -> dependent) using scipy.interpolate.interp1d
-    and scale by `brho`.
+    Excitation curve conversion: current <-> magnet strength.
 
-    - points: sequence of 2-tuples (indep, dep) or objects with `indep` and `dep`.
-    - forward(x) -> interpolated_dep(x) * brho
-    - inverse(y) -> x such that interpolated_dep(x) == y / brho (searches segments;
-      works for non-monotonic curves by returning the first matching segment)
+    The curve maps the independent variable (current) to the dependent one,
+    the field integrated over the magnet (e.g. B'L for a quadrupole, B*L for
+    a corrector), as measured at the facility (e.g. MAX IV's amp2k tables).
+    With s = -1 if `flip_dep_sign` else 1 and L = `length` (0 or None: 1,
+    the curve is then already the strength's integral, e.g. thin correctors):
+
+    - inverse(I) -> k = s * curve(I) / (brho * L)       (device -> lattice)
+    - forward(k) -> I such that s * curve(I) = k * brho * L  (lattice -> device)
+
+    Outside the curve, it is extended linearly from its end segments, as
+    MAX IV's amp2k does (interp1(..., 'linear', 'extrap')). forward() searches
+    the segments in order of increasing current and returns the first match,
+    so it also works for non-monotonic curves.
+
+    - points: sequence of objects with `indep` and `dep`.
+    - inverse() uses `bwd_points`, forward() `fwd_points` (callers usually
+      pass the same curve for both).
     """
 
     def __init__(
@@ -116,49 +128,73 @@ class EnergyIndependentCurveUnitConversion(StateConversion):
         flip_dep_sign: False,
         length: float
     ):
-        # forward interpolator: will raise if x out of bounds
-        # TODO: clean up it is a mess at the moment
-        # Todo: check that these conversions are correct
-        self._fwd = interp1d(
-            [t.dep for t in fwd_points],
-            [t.indep for t in fwd_points],
-            kind="linear",
-            # Todo: change later to true ... or make user configurable
-            bounds_error=False,
-        )
-        self._bwd = interp1d(
-            [t.indep for t in bwd_points],
-            [t.dep for t in bwd_points],
-            kind="linear",
-            # Todo: change later to true ... or make user configurable
-            bounds_error=False,
-        )
+        self._fwd_indep, self._fwd_dep = _sorted_curve(fwd_points)
+        self._bwd_indep, self._bwd_dep = _sorted_curve(bwd_points)
         self.brho = float(brho)
+        if self.brho == 0:
+            raise ValueError("brho must be non-zero")
         self.length = float(length) if length else 1.0
         self.fwd_points = fwd_points
         self.bwd_points = bwd_points
         self.flip_dep_sign = flip_dep_sign
 
+    def _sign(self) -> float:
+        return -1.0 if self.flip_dep_sign else 1.0
+
     def forward(self, state: float) -> float:
         logger.info(
             "%s.forward: brho %s state %s", self.__class__.__name__, self.brho, state
         )
-        x = float(state)
-        y = float(self._fwd(x))  # interp1d returns an array-like
-        if self.flip_dep_sign:
-            y = -y
-        return y * self.brho
+        target = self._sign() * float(state) * self.brho * self.length
+        return _solve_curve(self._fwd_indep, self._fwd_dep, target)
 
     def inverse(self, state: float) -> float:
-        # logger.info("%s.inverse: brho %s points %d state %s", self.__class__.__name__, self.brho, len(self._indep), state)
-        if self.brho == 0:
-            raise ValueError("brho must be non-zero for inversion")
-        target = float(state) / self.brho
-        y = float(self._bwd(target))  # interp1d returns an array-like
-        assert np.isfinite(y), "failed to inverse {state=} ({brho=}, {target=})"
-        if self.flip_dep_sign:
-            y = y * -1
-        return y / self.length
+        logger.info(
+            "%s.inverse: brho %s state %s", self.__class__.__name__, self.brho, state
+        )
+        dep = _eval_curve(self._bwd_indep, self._bwd_dep, float(state))
+        return self._sign() * dep / (self.brho * self.length)
+
+
+def _sorted_curve(points: Sequence[CurvePoint]):
+    pts = sorted((float(p.indep), float(p.dep)) for p in points)
+    if len(pts) < 2:
+        raise ValueError(f"an excitation curve needs at least 2 points, got {len(pts)}")
+    indep = np.array([p[0] for p in pts])
+    if np.any(np.diff(indep) == 0):
+        raise ValueError("excitation curve has repeated independent values")
+    return indep, np.array([p[1] for p in pts])
+
+
+def _eval_curve(indep: np.ndarray, dep: np.ndarray, x: float) -> float:
+    """Linear interpolation, extended linearly from the end segments."""
+    if x < indep[0]:
+        i = 0
+    elif x > indep[-1]:
+        i = len(indep) - 2
+    else:
+        return float(np.interp(x, indep, dep))
+    slope = (dep[i + 1] - dep[i]) / (indep[i + 1] - indep[i])
+    return float(dep[i] + slope * (x - indep[i]))
+
+
+def _solve_curve(indep: np.ndarray, dep: np.ndarray, y: float) -> float:
+    """x with curve(x) == y: the first segment (increasing x) containing y,
+    else the end segment the extended curve reaches y on."""
+    for i in range(len(indep) - 1):
+        lo, hi = sorted((dep[i], dep[i + 1]))
+        if lo <= y <= hi:
+            if dep[i + 1] == dep[i]:
+                return float(indep[i])
+            return float(indep[i] + (y - dep[i]) * (indep[i + 1] - indep[i]) / (dep[i + 1] - dep[i]))
+    for i, (x0, sign) in ((0, (indep[0], -1)), (len(indep) - 2, (indep[-1], 1))):
+        slope = (dep[i + 1] - dep[i]) / (indep[i + 1] - indep[i])
+        if slope == 0:
+            continue
+        x = indep[i] + (y - dep[i]) / slope
+        if (x - x0) * sign >= 0:
+            return float(x)
+    raise ValueError(f"excitation curve never reaches {y}")
 
 
 class MultiplierScaledByEnergyUnitConversion(StateConversion):
