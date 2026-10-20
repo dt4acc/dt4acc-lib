@@ -76,7 +76,15 @@ class PropertiesProxy(ElementInterface):
         #     "set_"
         # ), f"Expected property starts with 'set_' but property_id was  {property_id}"
         pp = self.get_property_proxy(property_id)
-        await pp.update(self.obj, value)
+        if isinstance(pp, MainStrengthForDipole):
+            assert self.get_reference_energy is not None
+            pp.set_reference_energy_cb(self.get_reference_energy)
+            try:
+                await pp.update(self.obj, value)
+            finally:
+                pp.set_reference_energy_cb(None)
+        else:
+            await pp.update(self.obj, value)
 
     def peek(self, property_id: str) -> object:
         # assert property_id.startswith(
