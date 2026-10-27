@@ -34,6 +34,11 @@ class AcceleratorSimulatorInterface(metaclass=ABCMeta):
         Derive from a list interface
     """
 
+    @property
+    def is_ring(self) -> bool:
+        """False for a transfer line: no periodic solution, no tune, no chromaticity"""
+        return True
+
     @abstractmethod
     def get(self, element_id) -> ElementInterface:
         """

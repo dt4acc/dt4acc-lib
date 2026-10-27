@@ -9,7 +9,7 @@ AT element classes. Compound element IDs (e.g. "CQLN:<host_uuid>") are still
 resolved via ADDON_PROXY_REGISTRY for correctors living on a host element.
 """
 import logging
-from typing import Sequence
+from typing import Optional, Sequence
 
 import at
 import copy
@@ -18,6 +18,7 @@ from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSim
 from dt4acc_lib.interfaces.simulator.element import ElementInterface
 from dt4acc_lib.pyat_simulator.proxies.proxy_factory import ElementProxyFactory
 
+from ..model.input.twiss_in import TwissIn
 from ..model.output.survey import SurveyDataForElement
 from ..model.output.track import StatePerTurn
 
@@ -31,18 +32,33 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
     Element lookup strategy:
       1. UUID attribute match: element.UUID == element_id  (SOLEIL .m lattice)
       2. FamName match: element.FamName == element_id      (MAX IV JSON lattice)
+
+    Ring or line:
+      * ring (``twiss_in`` None): periodic optics, closed orbit at the monitors
+      * line (``twiss_in`` given): optics propagated from the beam entering
+        the line, trajectory of its centroid at the monitors; no tune, no
+        chromaticity
     """
 
-    def __init__(self, *, at_lattice, proxy_factory: ElementProxyFactory = None, use_mp: bool = False):
+    def __init__(
+        self,
+        *,
+        at_lattice,
+        proxy_factory: ElementProxyFactory = None,
+        use_mp: bool = False,
+        twiss_in: Optional[TwissIn] = None,
+    ):
         """
         use_mp: track with pyAT's multiprocessing pool. Off by default: the
             pool forks, and forking a process that already runs threads (an
             IOC, a Tango server, the shared event loop) can deadlock the
             workers, so the first tracking request never returns.
+        twiss_in: beam entering a transfer line; None: a ring
         """
         self.use_mp = use_mp
         self.acc_orig_store = copy.deepcopy(at_lattice)
         self.acc = None
+        self.twiss_in = twiss_in
         self.reinit()
 
         # Todo: address proper Energy handling
@@ -60,14 +76,19 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(at_lattice={self.acc})"
 
+    @property
+    def is_ring(self) -> bool:
+        return self.twiss_in is None
+
     def reinit(self):
         self.acc = copy.deepcopy(self.acc_orig_store)
 
     def get_optics_parameters(self):
         assert self.acc is not None, \
             f"{self.__class__.__name__} is not properly initialised"
+        kwargs = {} if self.is_ring else dict(twiss_in=self.twiss_in.as_at())
         try:
-            x0, ring_pars, elem_data = self.acc.get_optics(at.All)
+            x0, ring_pars, elem_data = self.acc.get_optics(at.All, **kwargs)
         except ValueError as ve:
             # Assuming that ValueError means that optics calculation failed
             #
