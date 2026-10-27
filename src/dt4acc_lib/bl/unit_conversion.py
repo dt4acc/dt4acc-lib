@@ -211,14 +211,18 @@ class MultiplierScaledByEnergyUnitConversion(StateConversion):
         return r
 
     def inverse(self, state: float) -> float:
-        """corresponds to amp2k"""
+        """corresponds to amp2k
+
+        As ALS's amp2k: the energy on the ramp table for this current gives
+        the field ``ref_k * brho(e)``; K is that field over the brho of the
+        beam, the same brho forward() (k2amp) uses.
+        """
         lambda_ = self.conv_data.range.scale(state)
         corresponding_energy = self.bwd_interp(lambda_)
         ref_k = self.conv_data.reference_multiplyer
-        ref_brho = calculate_brho(self.conv_data.reference_energy)
         # Todo: fix data to be in eV
         t_brho = calculate_brho(corresponding_energy)
-        correction = t_brho / ref_brho
+        correction = t_brho / self.brho
         return ref_k * correction
 
 

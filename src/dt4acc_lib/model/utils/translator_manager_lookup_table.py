@@ -3,7 +3,8 @@ from functools import cached_property
 from typing import Union, Sequence, Dict
 
 from .command import ReadCommand
-from .identifiers import ConversionID
+# CurvePoint is defined in identifiers; importable from both modules
+from .identifiers import ConversionID, CurvePoint  # noqa: F401
 
 
 @dataclass
@@ -21,17 +22,6 @@ class PolynomCoefficients:
     coeffs: Sequence[float]
     #: does the conversion depend on the beam energy
     energy_dependent: bool
-
-
-@dataclass
-class CurvePoint:
-    """An interpolation point
-
-    Use a sequence of these to construct a curve
-    """
-
-    indep: float
-    dep: float
 
 
 @dataclass

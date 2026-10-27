@@ -122,19 +122,30 @@ def test_brho_and_its_inverse():
         assert calculate_brho_inverse(calculate_brho(energy)) == pytest.approx(energy, rel=1e-14)
 
 
-def test_energy_scaling_round_trip():
-    """MultiplierScaledByEnergyUnitConversion (ALS ramp tables) on the shared curve
-
-    forward() scales with the translator's brho, inverse() with the brho of the
-    reference energy: a round trip needs both the same
-    """
+def _energy_scaling(brho):
     table = [CurvePoint(indep=e * 1e9, dep=s) for e, s in ((1.5, 0.0), (1.7, 0.4), (1.9, 1.0))]
-    conv = MultiplierScaledByEnergyUnitConversion(
+    return MultiplierScaledByEnergyUnitConversion(
         conv_data=MultiplyerScaledByEnergy(
             reference_multiplyer=2.0, reference_energy=1.9e9, range=Range(min=100.0, max=200.0),
             scale_by_energy=table,
         ),
-        brho=calculate_brho(1.9e9),
+        brho=brho,
     )
+
+
+@pytest.mark.parametrize("energy", [1.6e9, 1.9e9])
+def test_energy_scaling_round_trip(energy):
+    """MultiplierScaledByEnergyUnitConversion (ALS ramp tables): forward() and
+    inverse() use the same brho, at the reference energy and away from it"""
+    conv = _energy_scaling(calculate_brho(energy))
     for current in (110.0, 150.0, 195.0):
-        assert conv.forward(conv.inverse(current)) == pytest.approx(current, rel=1e-9)
+        assert conv.forward(conv.inverse(current)) == pytest.approx(current, rel=1e-12)
+
+
+def test_energy_scaling_inverse_as_als_amp2k():
+    """k = K_ramp * brho(e) / brho(beam), e: the ramp table energy of the current"""
+    beam = calculate_brho(1.6e9)
+    conv = _energy_scaling(beam)
+    # 160 A: scaled 0.6 on the table, between 1.7 GeV (0.4) and 1.9 GeV (1.0)
+    e = 1.7e9 + (0.6 - 0.4) / (1.0 - 0.4) * 0.2e9
+    assert conv.inverse(160.0) == pytest.approx(2.0 * calculate_brho(e) / beam, rel=1e-12)
