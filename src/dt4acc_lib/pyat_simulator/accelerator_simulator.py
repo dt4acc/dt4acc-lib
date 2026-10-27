@@ -33,7 +33,14 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
       2. FamName match: element.FamName == element_id      (MAX IV JSON lattice)
     """
 
-    def __init__(self, *, at_lattice, proxy_factory: ElementProxyFactory = None):
+    def __init__(self, *, at_lattice, proxy_factory: ElementProxyFactory = None, use_mp: bool = False):
+        """
+        use_mp: track with pyAT's multiprocessing pool. Off by default: the
+            pool forks, and forking a process that already runs threads (an
+            IOC, a Tango server, the shared event loop) can deadlock the
+            workers, so the first tracking request never returns.
+        """
+        self.use_mp = use_mp
         self.acc_orig_store = copy.deepcopy(at_lattice)
         self.acc = None
         self.reinit()
@@ -79,7 +86,7 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
 
     def track(self, p0, n_turns, data_needed_at_element_index: Sequence[int]):
         r = at.tracking.lattice_track(
-            self.acc, p0, nturns=n_turns, refpts=data_needed_at_element_index, use_mp=True,
+            self.acc, p0, nturns=n_turns, refpts=data_needed_at_element_index, use_mp=self.use_mp,
         )
         return r
 

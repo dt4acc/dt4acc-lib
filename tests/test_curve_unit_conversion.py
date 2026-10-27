@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from dt4acc_lib.bl.unit_conversion import EnergyIndependentCurveUnitConversion
-from dt4acc_lib.model.utils.identifiers import CurvePoint
+from dt4acc_lib.model.utils.translator_manager_lookup_table import CurvePoint
 
 BRHO = 5.0034611376381655  # MAX IV R1, 1.5 GeV
 
