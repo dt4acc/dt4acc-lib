@@ -83,12 +83,16 @@ def test_unsorted_points_are_accepted():
     assert conv.inverse(250.0) == pytest.approx(ref.inverse(250.0))
 
 
-def test_non_monotonic_curve_is_rejected():
-    """forward() inverts the curve: it has to be strictly monotonic"""
+def test_non_monotonic_curve_returns_first_segment():
+    conv = _conv([0.0, 10.0, 20.0], [0.0, 10.0, 0.0], flip=False, length=1.0, brho=1.0)
+    assert conv.forward(5.0) == pytest.approx(5.0)
+
+
+def test_unreachable_target_raises():
+    conv = _conv([0.0, 10.0, 20.0], [0.0, 10.0, 10.0], flip=False, length=1.0, brho=1.0)
+    assert conv.forward(10.0) == pytest.approx(10.0)
     with pytest.raises(ValueError):
-        _conv([0.0, 10.0, 20.0], [0.0, 10.0, 0.0], flip=False, length=1.0, brho=1.0)
-    with pytest.raises(ValueError):
-        _conv([0.0, 10.0, 20.0], [0.0, 10.0, 10.0], flip=False, length=1.0, brho=1.0)
+        conv.forward(50.0)
 
 
 def test_degenerate_curves_are_rejected():
