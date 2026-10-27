@@ -24,7 +24,13 @@ class ConversionID:
     lattice_property_id: LatticeElementPropertyID
     device_property_id: DevicePropertyID
 
+
 @dataclass
 class CurvePoint:
+    """An interpolation point
+
+    Use a sequence of these to construct a curve
+    """
+
     indep: float
     dep: float

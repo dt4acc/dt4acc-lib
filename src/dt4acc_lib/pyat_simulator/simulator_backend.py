@@ -6,25 +6,32 @@ Todo:
     On the other hand the accelerator simulator knows e.g.: typically if twiss
     is calculated, orbit is calculated anyway.
 """
-
+import itertools
+import time
+from copy import copy as _copy
 import logging
 import math
 import threading
-from typing import Any, Dict, Sequence, Union, Tuple
+from typing import Any, Dict, Sequence, Union, Tuple, List
 
 import numpy as np
+import numpy.typing as npt
 from transitions import Machine
 
 from dt4acc_lib.interfaces.backend.backend import SimulatorBackendRW
 from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface, OpticsCalculationError, \
     OpticsCalculationProhibitedError
+from dt4acc_lib.interfaces.backend.calculation_states import CalculationStates
 from dt4acc_lib.interfaces.simulator.result_element import ResultElement
+from dt4acc_lib.interfaces.simulator.virtual_element import VirtualElementInterface
 from dt4acc_lib.model.output.calculated_track import CalculatedTrack, CalculatedPosition
 from dt4acc_lib.model.output.survey import SurveyDataForElement
 from dt4acc_lib.model.output.tune import Tune, Chromaticity
 from dt4acc_lib.model.output.twiss import Twiss, TwissAtPosition, TwissParameters
 
-from dt4acc_lib.interfaces.backend.calculation_states import CalculationStates as States, CalculationStates
+from ..model.output.track import ParticleState, StatePerTurn, StatePerElement, ParticleStateCollection, StatesForTurns, \
+    StatePerElementPerTurn
+from ..model.output.track_as_np_wrapper import NPStatePerElementPerTurn, NPStatesForTurns
 
 logger = logging.getLogger()
 
@@ -42,13 +49,96 @@ class OrbitElement(ResultElement):
         raise NotImplementedError("Need to define orbit object?")
 
 
+class TurnByTurnStart(VirtualElementInterface):
+    def __init__(self):
+        self._n_turns = 1
+        self._p0: List[ParticleState] = []
+        self._data_needed_at: List[str] = []
+        self.count_runs = itertools.count()
+        self.run_id = next(self.count_runs)
+
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}("
+            f"n_turns={self.get_n_turns()}"
+            f", p0={self.get_p0()}"
+            f", data_needed_at={self.get_data_needed_at()}"
+            f", run_id={self.run_id}"
+            ")"
+        )
+
+    def get_n_turns(self) -> int:
+        return self._n_turns
+
+    def set_n_turns(self, n_turns):
+        assert n_turns >= 1
+        self._n_turns = n_turns
+
+    def get_data_needed_at(self) -> Sequence[str]:
+        return self._data_needed_at
+
+    def set_data_needed_at(self, data_needed_at):
+        self._data_needed_at = data_needed_at
+
+    def get_p0(self) -> Sequence[ParticleState]:
+        return self._p0
+
+    def set_p0(self, p0):
+        # Todo: which checks to apply
+        # at is picky on this shape
+        self._p0 = p0
+
+    def set_run(self):
+        self.run_id = next(self.count_runs)
+
+    def get_run(self):
+        return self.run_id
+
+    def get(self, prop_id: str) -> Union[int, Sequence[ParticleState], Sequence[str]]:
+        return {
+            "n_turns": self.get_n_turns(),
+            "data_needed_at": self.get_data_needed_at(),
+            "p0": self.get_p0(),
+            "start": self.get_run(),
+        }[prop_id]
+
+    def set(self, prop_id: str, value: Union[int, Sequence[ParticleState], Sequence[str]]) -> object:
+        if prop_id == "n_turns":
+            self.set_n_turns(n_turns=int(value))
+        elif prop_id == "p0":
+            self.set_p0(value)
+        elif prop_id == "data_needed_at":
+            self.set_data_needed_at(data_needed_at=value)
+        elif prop_id == "start":
+            self.set_run()
+        else:
+            raise AttributeError(f"Unknown property id {prop_id}")
+
+
+class TurnByTurnElement(ResultElement):
+    """Turn by turn data along the lattice
+    """
+    def __init__(self, backend):
+        self.backend: SimulatorBackend = backend
+
+    def get(self, prop_id: str) -> Union[int, NPStatesForTurns]:
+        assert prop_id == "pos", f"Don't know how to handle {prop_id}"
+        r =  self.backend.compute_track_using_track_start()
+        return r
+
+
 class TrackElement(ResultElement):
     """Orbit as represented by beam position monitors
+
+    Todo:
+        rename to OrbitElement or ClosedOrbit / ReferenceOrbit?
     """
     def __init__(self, backend):
         self.backend = backend
 
     def get(self, prop_id: str) -> Union[CalculatedTrack, None]:
+        # Todo: check that prop_id matches to what is expected ..
+        assert prop_id == "pos"
         names, uuids, optics_parameters = self.backend.get_optics()
         if optics_parameters is None:
             return None
@@ -98,6 +188,8 @@ class TuneElement(ResultElement):
 
     def get(self, prop_id: str) -> Union[Tune, None]:
         assert prop_id == "transversal", f"Only prepared to handle transversal tune but got {prop_id}"
+        if not self.backend.acc.is_ring:
+            return Tune(x=math.nan, y=math.nan)
         _, __, optics_parameters = self.backend.get_optics()
         if optics_parameters is None:
             return None
@@ -121,6 +213,8 @@ class ChromaticityElement(ResultElement):
 
     def get(self, prop_id: str) -> Chromaticity:
         assert prop_id == "transversal", f"Only prepared to handle transversal chromaticity but got {prop_id}"
+        if not self.backend.acc.is_ring:
+            return Chromaticity(x=math.nan, y=math.nan)
         try:
             # Todo: fix this translation
             import at
@@ -201,6 +295,8 @@ class SimulatorBackend(SimulatorBackendRW):
             calculation_lock = threading.Lock()
         self.calculation_lock = calculation_lock
         self.model = SimulationStateModel()
+
+        States = CalculationStates
         self.state = Machine(
             model=self.model,
             # fmt:off
@@ -219,13 +315,22 @@ class SimulatorBackend(SimulatorBackendRW):
             initial=States.pending,
         )
 
+        # Todo: rename to virtual elements?
+        # these elements are read only
+        # data filled by simulation engine
         self.result_elements = dict(
             orbit=OrbitElement(backend=self),
             track=TrackElement(backend=self),
+            turn_by_turn=TurnByTurnElement(backend=self),
             tune=TuneElement(backend=self),
             chromaticity=ChromaticityElement(backend=self),
             twiss=TwissElement(backend=self),
             survey=SurveyElement(backend=self),
+        )
+        # These elments provide info to be filled form outside
+        # so that it is available in the calculation when needed
+        self.virtual_element = dict(
+            turn_by_turn_start=TurnByTurnStart(),
         )
 
     def get_state(self) -> CalculationStates:
@@ -281,7 +386,9 @@ class SimulatorBackend(SimulatorBackendRW):
         result_element = self.result_elements.get(dev_id, None)
         if result_element:
             return result_element.get(prop_id)
-
+        virtual_element = self.virtual_element.get(dev_id, None)
+        if virtual_element:
+            return virtual_element.get(prop_id)
         elem = self.acc.get(dev_id)
         return elem.peek(prop_id)
 
@@ -298,6 +405,9 @@ class SimulatorBackend(SimulatorBackendRW):
                 # if in acknowledged mode: user / higher layer needs to reset
                 # it actively
                 self.model.changed()
+            virtual_element = self.virtual_element.get(dev_id, None)
+            if virtual_element:
+                return virtual_element.set(prop_id, value)
             elem = self.acc.get(dev_id)
             r = await elem.update(property_id=prop_id, value=value)
         return r
@@ -370,9 +480,14 @@ class SimulatorBackend(SimulatorBackendRW):
 
         elem_names = [elem.FamName for elem in self.acc.acc]
         elem_uids = [extract_element_id(elem) for elem in self.acc.acc]
-        # optics repeats data for the first element
-        self.elem_names = elem_names + [elem_names[0]]
-        self.elem_uids = elem_uids + [elem_uids[0]]
+        # optics has one point more than elements: the end of the lattice.
+        # In a ring it is the first element again, in a line its exit
+        if self.acc.is_ring:
+            self.elem_names = elem_names + [elem_names[0]]
+            self.elem_uids = elem_uids + [elem_uids[0]]
+        else:
+            self.elem_names = elem_names + [f"{elem_names[-1]}:exit"]
+            self.elem_uids = elem_uids + [f"{elem_uids[-1]}:exit"]
 
     def get_element_names(self) -> Sequence[str]:
         if self.elem_names is None:
@@ -395,5 +510,77 @@ class SimulatorBackend(SimulatorBackendRW):
         ]
         return r
 
+    def compute_track_using_track_start(self) -> NPStatesForTurns:
+        start = self.virtual_element["turn_by_turn_start"]
+        return self.compute_track(
+            start.get_p0(), start.get_n_turns(), start.get_data_needed_at()
+        )
 
-_all__ = ["SimulationBackend"]
+    def compute_track(self, p0: Sequence[ParticleState], n_turns: int, data_needed_at: Sequence[str]) -> NPStatesForTurns:
+        # That should be really fast ... no need to go further if that
+        # can not be achieved
+
+        # No need to compute without output
+        assert len(data_needed_at) > 0
+        elem_uids = self.get_element_uids()
+        indices = [idx for idx, uid in enumerate(elem_uids) if uid in data_needed_at]
+        assert len(indices) > 0
+        sel_elem_uids = [elem_uids[idx] for idx in indices]
+        assert len(sel_elem_uids) > 0
+        p0 = np.array([p.as_array() for p in p0]).transpose()
+        if len(p0) == 0:
+            raise AssertionError("No start vector given for tracking!")
+
+        start = time.time()
+        track_data, info, loss_map = self.acc.track(p0, n_turns=n_turns, data_needed_at_element_index=indices)
+        end = time.time()
+        dt = end - start
+        logger.warning(
+            "Computing %d turns took %s", n_turns, dt
+        )
+
+        return NPStatesForTurns(fill_turns_to_element(track_data, sel_elem_uids))
+
+        # return track_data
+        track_data_model = fill_state_per_element(track_data, data_needed_at)
+        return StatesForTurns(turns=track_data_model)
+
+
+def fill_turns_to_element(track_data: npt.NDArray[np.floating], elem_uids: Sequence[str]) -> Sequence[NPStatePerElementPerTurn]:
+    return [
+        NPStatePerElementPerTurn(observed_at_element, uid=uid)
+        for observed_at_element, uid in zip(track_data.transpose(2, 0, 1, 3), elem_uids)
+    ]
+
+
+def fill_state_per_element(track_data, elm_uids: Sequence[str]) -> Sequence[StatePerTurn]:
+    # check the state, in a manner that documents the assumption
+    n_state_elms, n_particles, per_n_elems, n_turns = track_data.shape
+
+    # That is the assumption for now: for each element there is data
+    assert len(elm_uids) == per_n_elems
+
+    return [
+        StatePerTurn(fill_state_per_element_per_track(track, elm_uids))
+        for track in track_data.transpose(3, 0, 1, 2)
+    ]
+
+
+def fill_state_per_element_per_track(one_track_data, elm_uids: Sequence[str]) -> Sequence[StatePerElement]:
+    return [
+       StatePerElement(ParticleStateCollection([ParticleState.from_sequence(p) for p in p_for_particles]), uid)
+        for p_for_particles, uid in zip(one_track_data.transpose(2, 1, 0), elm_uids)
+    ]
+
+
+def rectify_uid_for_last_element_if_needed(uids: Sequence[str], copy=True) -> Sequence[str]:
+    """
+    """
+    if uids[0] == uids[-1]:
+        if copy:
+            uids = _copy(uids)
+        uids[-1] = uids[-1] + "_same_pos_as_start"
+    return uids
+
+
+__all__ = ["SimulatorBackend"]
