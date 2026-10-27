@@ -1,10 +1,18 @@
-import math
 
 import numpy as np
 import pytest
-
-from dt4acc_lib.bl.unit_conversion import EnergyIndependentCurveUnitConversion
-from dt4acc_lib.model.utils.translator_manager_lookup_table import CurvePoint
+from dt4acc_lib.bl.unit_conversion import (
+    EnergyIndependentCurveUnitConversion,
+    LinearCurve,
+    MultiplierScaledByEnergyUnitConversion,
+    calculate_brho,
+    calculate_brho_inverse,
+)
+from dt4acc_lib.model.utils.translator_manager_lookup_table import (
+    CurvePoint,
+    MultiplyerScaledByEnergy,
+    Range,
+)
 
 BRHO = 5.0034611376381655  # MAX IV R1, 1.5 GeV
 
@@ -75,9 +83,12 @@ def test_unsorted_points_are_accepted():
     assert conv.inverse(250.0) == pytest.approx(ref.inverse(250.0))
 
 
-def test_non_monotonic_curve_returns_first_segment():
-    conv = _conv([0.0, 10.0, 20.0], [0.0, 10.0, 0.0], flip=False, length=1.0, brho=1.0)
-    assert conv.forward(5.0) == pytest.approx(5.0)
+def test_non_monotonic_curve_is_rejected():
+    """forward() inverts the curve: it has to be strictly monotonic"""
+    with pytest.raises(ValueError):
+        _conv([0.0, 10.0, 20.0], [0.0, 10.0, 0.0], flip=False, length=1.0, brho=1.0)
+    with pytest.raises(ValueError):
+        _conv([0.0, 10.0, 20.0], [0.0, 10.0, 10.0], flip=False, length=1.0, brho=1.0)
 
 
 def test_degenerate_curves_are_rejected():
@@ -89,8 +100,41 @@ def test_degenerate_curves_are_rejected():
         _conv(SQFI_I, SQFI_G, brho=0.0)
 
 
-def test_unreachable_target_raises():
-    conv = _conv([0.0, 10.0, 20.0], [0.0, 10.0, 10.0], flip=False, length=1.0, brho=1.0)
-    assert math.isclose(conv.forward(10.0), 10.0)
-    with pytest.raises(ValueError):
-        conv.forward(50.0)
+def test_curve_extended_from_its_end_segments():
+    """Outside the table: linear from the end segments, as amp2k's interp1(..., 'extrap')"""
+    conv = _conv([0.0, 10.0, 20.0], [0.0, 10.0, 30.0], flip=False, length=1.0, brho=1.0)
+    assert conv.inverse(25.0) == pytest.approx(40.0)
+    assert conv.inverse(-5.0) == pytest.approx(-5.0)
+    assert conv.forward(40.0) == pytest.approx(25.0)
+    assert conv.forward(-5.0) == pytest.approx(-5.0)
+
+
+def test_linear_curve_and_its_inverse():
+    curve = LinearCurve([20.0, 0.0, 10.0], [30.0, 0.0, 10.0])
+    assert curve(15.0) == pytest.approx(20.0)
+    inverse = curve.inverted()
+    for x in (-3.0, 0.0, 4.0, 15.0, 27.0):
+        assert inverse(curve(x)) == pytest.approx(x)
+
+
+def test_brho_and_its_inverse():
+    for energy in (0.6e9, 1.5e9, 1.9e9, 3e9):
+        assert calculate_brho_inverse(calculate_brho(energy)) == pytest.approx(energy, rel=1e-14)
+
+
+def test_energy_scaling_round_trip():
+    """MultiplierScaledByEnergyUnitConversion (ALS ramp tables) on the shared curve
+
+    forward() scales with the translator's brho, inverse() with the brho of the
+    reference energy: a round trip needs both the same
+    """
+    table = [CurvePoint(indep=e * 1e9, dep=s) for e, s in ((1.5, 0.0), (1.7, 0.4), (1.9, 1.0))]
+    conv = MultiplierScaledByEnergyUnitConversion(
+        conv_data=MultiplyerScaledByEnergy(
+            reference_multiplyer=2.0, reference_energy=1.9e9, range=Range(min=100.0, max=200.0),
+            scale_by_energy=table,
+        ),
+        brho=calculate_brho(1.9e9),
+    )
+    for current in (110.0, 150.0, 195.0):
+        assert conv.forward(conv.inverse(current)) == pytest.approx(current, rel=1e-9)

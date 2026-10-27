@@ -49,10 +49,7 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
         twiss_in: Optional[TwissIn] = None,
     ):
         """
-        use_mp: track with pyAT's multiprocessing pool. Off by default: the
-            pool forks, and forking a process that already runs threads (an
-            IOC, a Tango server, the shared event loop) can deadlock the
-            workers, so the first tracking request never returns.
+        use_mp: track with pyAT's multiprocessing pool (off by default, see :meth:`track`)
         twiss_in: beam entering a transfer line; None: a ring
         """
         self.use_mp = use_mp
@@ -106,6 +103,18 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
         return r
 
     def track(self, p0, n_turns, data_needed_at_element_index: Sequence[int]):
+        """Track the start vectors ``p0`` for ``n_turns``
+
+        Without pyAT's multiprocessing pool unless ``use_mp``: the pool
+        forks the process, and a fork of a process that already runs
+        threads can leave the workers hanging. Seen in the ALS EPICS twin
+        (dt4acc-als): the soft IOC's and PV Access threads and the shared
+        event loop were running, the first setpoint write left the turn by
+        turn, twiss and track reads hanging in ``Pool.starmap``, orbit and
+        twiss PVs never updated. It does not depend on how many engines a
+        process has (there was one). Tracking a few particles gains nothing
+        from a pool.
+        """
         r = at.tracking.lattice_track(
             self.acc, p0, nturns=n_turns, refpts=data_needed_at_element_index, use_mp=self.use_mp,
         )

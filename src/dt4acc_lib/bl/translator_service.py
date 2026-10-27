@@ -65,7 +65,9 @@ class TranslatorService(TranslatorServiceBase):
         assert callable(to.register_reference_cache)
         if to not in self.to_needs_reference_cache:
             self.to_needs_reference_cache.append(to)
-        if self.reference_cache:
+        # the cache may be registered later: register_reference_cache() hands it
+        # to every conversion collected here
+        if self.reference_cache is not None:
             to.register_reference_cache(self.reference_cache)
 
     @functools.lru_cache(maxsize=None)

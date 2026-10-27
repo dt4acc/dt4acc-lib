@@ -26,8 +26,9 @@ def calculate_brho(energy: float, rest_mass: float = 511e3) -> float:
 
 
 def calculate_brho_inverse(brho: float, rest_mass: float = 511e3) -> float:
-    energy_without_rest_mass = brho * speed_of_light
-    energy = np.sqrt((energy_without_rest_mass) ** 2 - rest_mass ** 2) - rest_mass
+    """Kinetic energy [eV] for ``brho``: the inverse of :func:`calculate_brho`"""
+    momentum = brho * speed_of_light
+    energy = np.sqrt(momentum ** 2 + rest_mass ** 2) - rest_mass
     return energy
 
 
@@ -108,9 +109,8 @@ class EnergyIndependentCurveUnitConversion(StateConversion):
     - forward(k) -> I such that s * curve(I) = k * brho * L  (lattice -> device)
 
     Outside the curve, it is extended linearly from its end segments, as
-    MAX IV's amp2k does (interp1(..., 'linear', 'extrap')). forward() searches
-    the segments in order of increasing current and returns the first match,
-    so it also works for non-monotonic curves.
+    MAX IV's amp2k does (interp1(..., 'linear', 'extrap')). forward() inverts
+    the curve: it has to be strictly monotonic.
 
     - points: sequence of objects with `indep` and `dep`.
     - inverse() uses `bwd_points`, forward() `fwd_points` (callers usually
@@ -128,8 +128,10 @@ class EnergyIndependentCurveUnitConversion(StateConversion):
         flip_dep_sign: False,
         length: float
     ):
-        self._fwd_indep, self._fwd_dep = _sorted_curve(fwd_points)
-        self._bwd_indep, self._bwd_dep = _sorted_curve(bwd_points)
+        # forward(): current for a field, the inverted curve
+        self._current_for_field = LinearCurve.from_points(fwd_points).inverted()
+        # inverse(): field for a current
+        self._field_for_current = LinearCurve.from_points(bwd_points)
         self.brho = float(brho)
         if self.brho == 0:
             raise ValueError("brho must be non-zero")
@@ -146,55 +148,47 @@ class EnergyIndependentCurveUnitConversion(StateConversion):
             "%s.forward: brho %s state %s", self.__class__.__name__, self.brho, state
         )
         target = self._sign() * float(state) * self.brho * self.length
-        return _solve_curve(self._fwd_indep, self._fwd_dep, target)
+        return self._current_for_field(target)
 
     def inverse(self, state: float) -> float:
         logger.info(
             "%s.inverse: brho %s state %s", self.__class__.__name__, self.brho, state
         )
-        dep = _eval_curve(self._bwd_indep, self._bwd_dep, float(state))
+        dep = self._field_for_current(float(state))
         return self._sign() * dep / (self.brho * self.length)
 
 
-def _sorted_curve(points: Sequence[CurvePoint]):
-    pts = sorted((float(p.indep), float(p.dep)) for p in points)
-    if len(pts) < 2:
-        raise ValueError(f"an excitation curve needs at least 2 points, got {len(pts)}")
-    indep = np.array([p[0] for p in pts])
-    if np.any(np.diff(indep) == 0):
-        raise ValueError("excitation curve has repeated independent values")
-    return indep, np.array([p[1] for p in pts])
+class LinearCurve:
+    """y(x), piecewise linear between the points, extended linearly from its
+    end segments outside them (MATLAB's interp1(..., 'linear', 'extrap'))
 
+    Used for excitation curves (current <-> field) and for energy scaling
+    tables (energy <-> scaled current).
+    """
 
-def _eval_curve(indep: np.ndarray, dep: np.ndarray, x: float) -> float:
-    """Linear interpolation, extended linearly from the end segments."""
-    if x < indep[0]:
-        i = 0
-    elif x > indep[-1]:
-        i = len(indep) - 2
-    else:
-        return float(np.interp(x, indep, dep))
-    slope = (dep[i + 1] - dep[i]) / (indep[i + 1] - indep[i])
-    return float(dep[i] + slope * (x - indep[i]))
+    def __init__(self, x: Sequence[float], y: Sequence[float]):
+        pts = sorted(zip((float(v) for v in x), (float(v) for v in y)))
+        if len(pts) < 2:
+            raise ValueError(f"a curve needs at least 2 points, got {len(pts)}")
+        self.x = np.array([p[0] for p in pts])
+        self.y = np.array([p[1] for p in pts])
+        if np.any(np.diff(self.x) == 0):
+            raise ValueError("curve has repeated independent values")
+        self._f = interp1d(self.x, self.y, kind="linear", fill_value="extrapolate", assume_sorted=True)
 
+    @classmethod
+    def from_points(cls, points: Sequence[CurvePoint]) -> "LinearCurve":
+        return cls([p.indep for p in points], [p.dep for p in points])
 
-def _solve_curve(indep: np.ndarray, dep: np.ndarray, y: float) -> float:
-    """x with curve(x) == y: the first segment (increasing x) containing y,
-    else the end segment the extended curve reaches y on."""
-    for i in range(len(indep) - 1):
-        lo, hi = sorted((dep[i], dep[i + 1]))
-        if lo <= y <= hi:
-            if dep[i + 1] == dep[i]:
-                return float(indep[i])
-            return float(indep[i] + (y - dep[i]) * (indep[i + 1] - indep[i]) / (dep[i + 1] - dep[i]))
-    for i, (x0, sign) in ((0, (indep[0], -1)), (len(indep) - 2, (indep[-1], 1))):
-        slope = (dep[i + 1] - dep[i]) / (indep[i + 1] - indep[i])
-        if slope == 0:
-            continue
-        x = indep[i] + (y - dep[i]) / slope
-        if (x - x0) * sign >= 0:
-            return float(x)
-    raise ValueError(f"excitation curve never reaches {y}")
+    def __call__(self, x: float) -> float:
+        return float(self._f(float(x)))
+
+    def inverted(self) -> "LinearCurve":
+        """x(y); needs y strictly monotonic in x"""
+        steps = np.diff(self.y)
+        if not (np.all(steps > 0) or np.all(steps < 0)):
+            raise ValueError("curve is not strictly monotonic: it can not be inverted")
+        return LinearCurve(self.y, self.x)
 
 
 class MultiplierScaledByEnergyUnitConversion(StateConversion):
@@ -203,24 +197,9 @@ class MultiplierScaledByEnergyUnitConversion(StateConversion):
         self.brho = float(brho)
         self.conv_data = conv_data
 
-        self.fwd_interp = interp1d(
-            # from energy to scaled current
-            [t.indep for t in conv_data.scale_by_energy],
-            [t.dep for t in conv_data.scale_by_energy],
-            kind="linear",
-            # Todo: change later to true ... or make user configurable
-            bounds_error=False,
-            fill_value="extrapolate"
-        )
-        self.bwd_interp = interp1d(
-            # from scaled current to energy
-            [t.dep for t in conv_data.scale_by_energy],
-            [t.indep for t in conv_data.scale_by_energy],
-            kind="linear",
-            # Todo: change later to true ... or make user configurable
-            bounds_error=False,
-            fill_value="extrapolate"
-        )
+        # from energy to scaled current, and back
+        self.fwd_interp = LinearCurve.from_points(conv_data.scale_by_energy)
+        self.bwd_interp = self.fwd_interp.inverted()
 
     def forward(self, state: float) -> float:
         """corresponds to k2amp"""
@@ -279,7 +258,7 @@ class UnitConversionAroundReferenceValue(StateConversion):
         return tmp - rev_tgt
 
     def get_reference_value(self, rcmd: ReadCommand) -> float:
-        if not self.reference_cache:
+        if self.reference_cache is None:
             raise ValueError("reference_cache must be registered at this stage. Did you register it with translation service?")
         assert rcmd is not None
         rev_val = self.reference_cache.get(rcmd)
@@ -291,6 +270,7 @@ __all__ = [
     "EnergyDependentLinearUnitConversion",
     "LinearUnitConversion",
     "EnergyIndependentCurveUnitConversion",
+    "LinearCurve",
     "MultiplierScaledByEnergyUnitConversion",
     "calculate_brho_inverse",
     "calculate_brho",
