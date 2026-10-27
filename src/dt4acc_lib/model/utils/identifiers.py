@@ -24,7 +24,3 @@ class ConversionID:
     lattice_property_id: LatticeElementPropertyID
     device_property_id: DevicePropertyID
 
-@dataclass
-class CurvePoint:
-    indep: float
-    dep: float

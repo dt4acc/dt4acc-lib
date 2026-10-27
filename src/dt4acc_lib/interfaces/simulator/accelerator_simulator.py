@@ -10,6 +10,7 @@ from typing import Sequence
 
 from .element import ElementInterface
 from ...model.output.survey import SurveyDataForElement
+from ...model.output.track import StatePerTurn
 
 
 class OpticsCalculationError(Exception):
@@ -39,6 +40,27 @@ class AcceleratorSimulatorInterface(metaclass=ABCMeta):
         Review if derived classes use async implementations
         """
         pass
+
+    @abstractmethod
+    def track(self, p0: Sequence[float], n_turns: int, data_needed_at_element_index: Sequence[int]):
+        """track along the ring
+
+        Args:
+            p0: start vector
+            n_turns: number of turns
+
+
+        Returns:
+            state for each particle for each requested device for each turn
+
+        The design follows currently at.tracking.lattice_track
+        Needs to be revisited as soon as an other calculation engine is
+        to be integrated
+
+        Todo:
+            do we need to be able to start tracking at any point?
+            Work on tracking output
+        """
 
     @abstractmethod
     def get_survey(self) -> Sequence[SurveyDataForElement]:

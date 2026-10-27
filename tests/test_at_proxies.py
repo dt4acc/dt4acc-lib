@@ -17,22 +17,6 @@ from dt4acc_lib.pyat_simulator.element_properties.multipole import (
 )
 
 
-@pytest.fixture(scope="module")
-def get_reference_energy():
-    def actual_energy():
-        return 4.2e9
-    return actual_energy
-
-
-@pytest.fixture(scope="function")
-def element_proxy_factory(get_reference_energy):
-    """
-    Warning:
-            this mock up is only good enough if energy is not really used
-    """
-    return ElementProxyFactory(get_reference_energy=get_reference_energy)
-
-
 def test_at_proxy_instantiation():
     """Just see that instaniation works"""
     lut = create_at_properties_lut_per_element_cls()
