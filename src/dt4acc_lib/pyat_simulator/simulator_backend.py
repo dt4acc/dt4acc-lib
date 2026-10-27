@@ -98,6 +98,8 @@ class TuneElement(ResultElement):
 
     def get(self, prop_id: str) -> Union[Tune, None]:
         assert prop_id == "transversal", f"Only prepared to handle transversal tune but got {prop_id}"
+        if not self.backend.acc.is_ring:
+            return Tune(x=math.nan, y=math.nan)
         _, __, optics_parameters = self.backend.get_optics()
         if optics_parameters is None:
             return None
@@ -121,6 +123,8 @@ class ChromaticityElement(ResultElement):
 
     def get(self, prop_id: str) -> Chromaticity:
         assert prop_id == "transversal", f"Only prepared to handle transversal chromaticity but got {prop_id}"
+        if not self.backend.acc.is_ring:
+            return Chromaticity(x=math.nan, y=math.nan)
         try:
             # Todo: fix this translation
             import at
@@ -370,9 +374,14 @@ class SimulatorBackend(SimulatorBackendRW):
 
         elem_names = [elem.FamName for elem in self.acc.acc]
         elem_uids = [extract_element_id(elem) for elem in self.acc.acc]
-        # optics repeats data for the first element
-        self.elem_names = elem_names + [elem_names[0]]
-        self.elem_uids = elem_uids + [elem_uids[0]]
+        # optics has one point more than elements: the end of the lattice.
+        # In a ring it is the first element again, in a line its exit
+        if self.acc.is_ring:
+            self.elem_names = elem_names + [elem_names[0]]
+            self.elem_uids = elem_uids + [elem_uids[0]]
+        else:
+            self.elem_names = elem_names + [f"{elem_names[-1]}:exit"]
+            self.elem_uids = elem_uids + [f"{elem_uids[-1]}:exit"]
 
     def get_element_names(self) -> Sequence[str]:
         if self.elem_names is None:
