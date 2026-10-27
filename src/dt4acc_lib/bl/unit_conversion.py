@@ -110,8 +110,7 @@ class EnergyIndependentCurveUnitConversion(StateConversion):
 
     Outside the curve, it is extended linearly from its end segments, as
     MAX IV's amp2k does (interp1(..., 'linear', 'extrap')). forward() inverts
-    the curve (a non-monotonic curve: the first segment, in order of increasing
-    current, that reaches the field).
+    the curve: it has to be strictly monotonic.
 
     - points: sequence of objects with `indep` and `dep`.
     - inverse() uses `bwd_points`, forward() `fwd_points` (callers usually
@@ -184,38 +183,12 @@ class LinearCurve:
     def __call__(self, x: float) -> float:
         return float(self._f(float(x)))
 
-    def is_monotonic(self) -> bool:
+    def inverted(self) -> "LinearCurve":
+        """x(y); needs y strictly monotonic in x"""
         steps = np.diff(self.y)
-        return bool(np.all(steps > 0) or np.all(steps < 0))
-
-    def inverted(self):
-        """x(y): a LinearCurve for a strictly monotonic curve; else (e.g. a
-        table with a flat or turning segment) the first segment, in order of
-        increasing x, that reaches y, or the extended end segment"""
-        if self.is_monotonic():
-            return LinearCurve(self.y, self.x)
-        logger.warning(
-            "curve %s -> %s is not strictly monotonic: inverting it segment by segment",
-            self.x.tolist(), self.y.tolist(),
-        )
-        return lambda y: _first_segment_reaching(self.x, self.y, float(y))
-
-
-def _first_segment_reaching(x: np.ndarray, y: np.ndarray, target: float) -> float:
-    for i in range(len(x) - 1):
-        lo, hi = sorted((y[i], y[i + 1]))
-        if lo <= target <= hi:
-            if y[i + 1] == y[i]:
-                return float(x[i])
-            return float(x[i] + (target - y[i]) * (x[i + 1] - x[i]) / (y[i + 1] - y[i]))
-    for i, x0, sign in ((0, x[0], -1), (len(x) - 2, x[-1], 1)):
-        slope = (y[i + 1] - y[i]) / (x[i + 1] - x[i])
-        if slope == 0:
-            continue
-        xs = x[i] + (target - y[i]) / slope
-        if (xs - x0) * sign >= 0:
-            return float(xs)
-    raise ValueError(f"curve never reaches {target}")
+        if not (np.all(steps > 0) or np.all(steps < 0)):
+            raise ValueError("curve is not strictly monotonic: it can not be inverted")
+        return LinearCurve(self.y, self.x)
 
 
 class MultiplierScaledByEnergyUnitConversion(StateConversion):
