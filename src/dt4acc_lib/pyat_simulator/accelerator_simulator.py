@@ -102,7 +102,7 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
         r = at.get_s_pos(self.acc)
         return r
 
-    def track(self, p0, n_turns, data_needed_at_element_index: Sequence[int]):
+    def track(self, p0, n_turns, data_needed_at_element_index: Sequence[int], start_index: int = 0):
         """Track the start vectors ``p0`` for ``n_turns``
 
         Without pyAT's multiprocessing pool unless ``use_mp``: the pool
@@ -114,9 +114,14 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
         twiss PVs never updated. It does not depend on how many engines a
         process has (there was one). Tracking a few particles gains nothing
         from a pool.
+
+        ``start_index``: track from that element on (the lattice rotated to start
+        there, the same element objects); ``data_needed_at_element_index`` counts
+        from it.
         """
+        lattice = self.acc.rotate(start_index) if start_index else self.acc
         r = at.tracking.lattice_track(
-            self.acc, p0, nturns=n_turns, refpts=data_needed_at_element_index, use_mp=self.use_mp,
+            lattice, p0, nturns=n_turns, refpts=data_needed_at_element_index, use_mp=self.use_mp,
         )
         return r
 

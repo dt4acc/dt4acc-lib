@@ -12,7 +12,7 @@ from copy import copy as _copy
 import logging
 import math
 import threading
-from typing import Any, Dict, Sequence, Union, Tuple, List
+from typing import Optional, Any, Dict, Sequence, Union, Tuple, List
 
 import numpy as np
 import numpy.typing as npt
@@ -54,6 +54,8 @@ class TurnByTurnStart(VirtualElementInterface):
         self._n_turns = 1
         self._p0: List[ParticleState] = []
         self._data_needed_at: List[str] = []
+        #: element the tracking starts at; None: the start of the lattice
+        self._start_at: Optional[str] = None
         self.count_runs = itertools.count()
         self.run_id = next(self.count_runs)
 
@@ -63,6 +65,7 @@ class TurnByTurnStart(VirtualElementInterface):
             f"n_turns={self.get_n_turns()}"
             f", p0={self.get_p0()}"
             f", data_needed_at={self.get_data_needed_at()}"
+            f", start_at={self.get_start_at()}"
             f", run_id={self.run_id}"
             ")"
         )
@@ -83,6 +86,13 @@ class TurnByTurnStart(VirtualElementInterface):
     def get_p0(self) -> Sequence[ParticleState]:
         return self._p0
 
+    def get_start_at(self) -> Optional[str]:
+        return self._start_at
+
+    def set_start_at(self, element: Optional[str]):
+        """Track from this element (e.g. an injection point): turn 1 starts there"""
+        self._start_at = element or None
+
     def set_p0(self, p0):
         # Todo: which checks to apply
         # at is picky on this shape
@@ -99,6 +109,7 @@ class TurnByTurnStart(VirtualElementInterface):
             "n_turns": self.get_n_turns(),
             "data_needed_at": self.get_data_needed_at(),
             "p0": self.get_p0(),
+            "start_at": self.get_start_at(),
             "start": self.get_run(),
         }[prop_id]
 
@@ -109,6 +120,8 @@ class TurnByTurnStart(VirtualElementInterface):
             self.set_p0(value)
         elif prop_id == "data_needed_at":
             self.set_data_needed_at(data_needed_at=value)
+        elif prop_id == "start_at":
+            self.set_start_at(value)
         elif prop_id == "start":
             self.set_run()
         else:
@@ -513,26 +526,44 @@ class SimulatorBackend(SimulatorBackendRW):
     def compute_track_using_track_start(self) -> NPStatesForTurns:
         start = self.virtual_element["turn_by_turn_start"]
         return self.compute_track(
-            start.get_p0(), start.get_n_turns(), start.get_data_needed_at()
+            start.get_p0(), start.get_n_turns(), start.get_data_needed_at(), start_at=start.get_start_at()
         )
 
-    def compute_track(self, p0: Sequence[ParticleState], n_turns: int, data_needed_at: Sequence[str]) -> NPStatesForTurns:
+    def compute_track(
+        self, p0: Sequence[ParticleState], n_turns: int, data_needed_at: Sequence[str], start_at: Optional[str] = None
+    ) -> NPStatesForTurns:
+        """Track ``p0`` for ``n_turns``, recorded at ``data_needed_at``
+
+        ``start_at``: the element tracking starts at (None: the start of the
+        lattice); turns are counted from there, the data come in the order
+        the beam passes the elements.
+        """
         # That should be really fast ... no need to go further if that
         # can not be achieved
 
         # No need to compute without output
         assert len(data_needed_at) > 0
-        elem_uids = self.get_element_uids()
-        indices = [idx for idx, uid in enumerate(elem_uids) if uid in data_needed_at]
+        # one entry per element (the optics' extra end point left out)
+        elem_uids = self.get_element_uids()[: len(self.acc.acc)]
+        start_index = 0
+        if start_at is not None:
+            starts = [idx for idx, uid in enumerate(elem_uids) if uid == start_at]
+            if len(starts) != 1:
+                raise ValueError(f"start_at {start_at!r}: expected one element of that id, found {len(starts)}")
+            (start_index,) = starts
+        n_elem = len(elem_uids)
+        indices = sorted((idx - start_index) % n_elem for idx, uid in enumerate(elem_uids) if uid in data_needed_at)
         assert len(indices) > 0
-        sel_elem_uids = [elem_uids[idx] for idx in indices]
+        sel_elem_uids = [elem_uids[(idx + start_index) % n_elem] for idx in indices]
         assert len(sel_elem_uids) > 0
         p0 = np.array([p.as_array() for p in p0]).transpose()
         if len(p0) == 0:
             raise AssertionError("No start vector given for tracking!")
 
         start = time.time()
-        track_data, info, loss_map = self.acc.track(p0, n_turns=n_turns, data_needed_at_element_index=indices)
+        track_data, info, loss_map = self.acc.track(
+            p0, n_turns=n_turns, data_needed_at_element_index=indices, start_index=start_index
+        )
         end = time.time()
         dt = end - start
         logger.warning(

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Union, Sequence, Dict
+from typing import Dict, Optional, Sequence, Union
 
 from .command import ReadCommand
 # CurvePoint is defined in identifiers; importable from both modules
@@ -19,9 +19,21 @@ class IdentityMapper:
 
 @dataclass
 class PolynomCoefficients:
+    """device = f(lattice): ``coeffs`` = (intercept, slope)
+
+    ``energy_dependent``: the coefficients are per brho (device = brho *
+    (intercept + slope * lattice)). ``reference_brho``: the facility gives the
+    calibration as lattice value per device value at that brho (e.g. a
+    steerer's kick per current at the design energy); ``coeffs`` are then
+    taken at ``reference_brho`` and the conversion scales them with the beam's
+    brho.
+    """
+
     coeffs: Sequence[float]
     #: does the conversion depend on the beam energy
     energy_dependent: bool
+    #: brho the coefficients were given at (None: they are per brho)
+    reference_brho: Optional[float] = None
 
 
 @dataclass

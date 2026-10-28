@@ -170,6 +170,11 @@ def create_translation_object_for_polynom_coefficients(
     brho: float,
 ) -> Union[LinearUnitConversion, EnergyDependentLinearUnitConversion]:
     intercept, slope = data_model.coeffs
+    if data_model.reference_brho is not None:
+        if not data_model.energy_dependent:
+            raise ValueError(f"{data_model}: reference_brho needs energy_dependent")
+        # given at reference_brho: per brho
+        intercept, slope = intercept / data_model.reference_brho, slope / data_model.reference_brho
     if data_model.energy_dependent:
         return EnergyDependentLinearUnitConversion(
             intercept=intercept, slope=slope, brho=brho
