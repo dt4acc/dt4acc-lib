@@ -9,7 +9,7 @@ AT element classes. Compound element IDs (e.g. "CQLN:<host_uuid>") are still
 resolved via ADDON_PROXY_REGISTRY for correctors living on a host element.
 """
 import logging
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Tuple
 
 import at
 import copy
@@ -86,8 +86,9 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
         kwargs = {} if self.is_ring else dict(twiss_in=self.twiss_in.as_at())
         try:
             x0, ring_pars, elem_data = self.acc.get_optics(at.All, **kwargs)
-        except ValueError as ve:
-            # Assuming that ValueError means that optics calculation failed
+        except (ValueError, at.AtError) as ve:
+            # Assuming that ValueError means that optics calculation failed;
+            # AtError: e.g. "Unstable ring", no closed orbit either
             #
             # log only on info: optics calculation failure is not so uncommon
             logger.info(
@@ -98,11 +99,17 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
             raise OpticsCalculationError("Failed to calculate optics parameters") from ve
         return x0, ring_pars, elem_data
 
+    def emittance_and_energy_spread(self) -> Tuple[float, float]:
+        """from the radiation integrals (pyAT's radiation_parameters; 4D and 6D)"""
+        rp = self.acc.radiation_parameters()
+        return float(rp.emittances[0]), float(rp.sigma_e)
+
     def get_survey(self) -> Sequence[SurveyDataForElement]:
         r = at.get_s_pos(self.acc)
         return r
 
-    def track(self, p0, n_turns, data_needed_at_element_index: Sequence[int], start_index: int = 0):
+    def track(self, p0, n_turns, data_needed_at_element_index: Sequence[int], start_index: int = 0,
+              losses: bool = False):
         """Track the start vectors ``p0`` for ``n_turns``
 
         Without pyAT's multiprocessing pool unless ``use_mp``: the pool
@@ -117,11 +124,13 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
 
         ``start_index``: track from that element on (the lattice rotated to start
         there, the same element objects); ``data_needed_at_element_index`` counts
-        from it.
+        from it. ``losses``: pyAT's loss map in the returned track data
+        (``loss_map``).
         """
         lattice = self.acc.rotate(start_index) if start_index else self.acc
         r = at.tracking.lattice_track(
             lattice, p0, nturns=n_turns, refpts=data_needed_at_element_index, use_mp=self.use_mp,
+            losses=losses,
         )
         return r
 

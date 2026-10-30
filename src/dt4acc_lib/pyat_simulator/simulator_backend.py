@@ -24,6 +24,7 @@ from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSim
 from dt4acc_lib.interfaces.backend.calculation_states import CalculationStates
 from dt4acc_lib.interfaces.simulator.result_element import ResultElement
 from dt4acc_lib.interfaces.simulator.virtual_element import VirtualElementInterface
+from dt4acc_lib.model.output.beam_survival import BeamSurvival, BeamSurvivalSettings
 from dt4acc_lib.model.output.calculated_track import CalculatedTrack, CalculatedPosition
 from dt4acc_lib.model.output.survey import SurveyDataForElement
 from dt4acc_lib.model.output.tune import Tune, Chromaticity
@@ -242,6 +243,18 @@ class ChromaticityElement(ResultElement):
         return Chromaticity(x=math.nan, y=math.nan)
 
 
+class BeamSurvivalElement(ResultElement):
+    """Is the beam stored: particles around the closed orbit tracked for
+    some turns (:meth:`SimulatorBackend.compute_beam_survival`)"""
+
+    def __init__(self, backend):
+        self.backend = backend
+
+    def get(self, prop_id: str) -> Union[BeamSurvival, None]:
+        assert prop_id == "stored", f"Only prepared to handle stored but got {prop_id}"
+        return self.backend.compute_beam_survival()
+
+
 class SurveyElement(ResultElement):
     """
     """
@@ -286,13 +299,18 @@ class SimulatorBackend(SimulatorBackendRW):
     """
 
     def __init__(
-        self, *, acc: AcceleratorSimulatorInterface, name: str, logger=logger, calculation_lock=None
+        self, *, acc: AcceleratorSimulatorInterface, name: str, logger=logger, calculation_lock=None,
+        beam_survival_settings: Optional[BeamSurvivalSettings] = None,
     ):
         self.acc = acc
         self.logger = logger
         self.name = name
+        self.beam_survival_settings = (
+            BeamSurvivalSettings() if beam_survival_settings is None else beam_survival_settings
+        )
 
         self.optics = None
+        self.beam_survival = None
         # These "must" be unique
         self.elem_uids = None
         # These are allowed to repeat
@@ -339,6 +357,7 @@ class SimulatorBackend(SimulatorBackendRW):
             chromaticity=ChromaticityElement(backend=self),
             twiss=TwissElement(backend=self),
             survey=SurveyElement(backend=self),
+            beam_survival=BeamSurvivalElement(backend=self),
         )
         # These elments provide info to be filled form outside
         # so that it is available in the calculation when needed
@@ -351,6 +370,7 @@ class SimulatorBackend(SimulatorBackendRW):
 
     def _clear_stored_results(self):
         self.optics = None
+        self.beam_survival = None
 
     def get_natural_view_name(self):
         return "design"
@@ -522,6 +542,61 @@ class SimulatorBackend(SimulatorBackendRW):
             for name, uid, s  in zip(elm_names, elm_uids, s_pos)
         ]
         return r
+
+    def compute_beam_survival(self) -> Union[BeamSurvival, None]:
+        """Track the closed orbit and particles at +- n_sigma beam sizes in x
+        and y around it, from the start of the lattice, for n_turns
+
+        Stored if a closed orbit exists and no particle is lost. Without
+        apertures in the lattice, pyAT loses a particle when it leaves the
+        dynamic aperture. None for a transfer line. Kept until the lattice
+        changes; the tracking holds the calculation lock, so no set changes
+        the lattice while it runs.
+        """
+        if not self.acc.is_ring:
+            return None
+        settings = self.beam_survival_settings
+        _, __, optics_parameters = self.get_optics()
+        if optics_parameters is None:
+            return BeamSurvival(stored=False, closed_orbit=False, n_turns=settings.n_turns,
+                                n_sigma=settings.n_sigma, sigma=(math.nan, math.nan))
+        with self.calculation_lock:
+            if self.optics is not optics_parameters:
+                # the lattice changed meanwhile: start over on the new optics
+                retry = True
+            else:
+                retry = False
+                if self.beam_survival is None:
+                    self.beam_survival = self._track_beam_survival(optics_parameters)
+                r = self.beam_survival
+        return self.compute_beam_survival() if retry else r
+
+    def _track_beam_survival(self, optics_parameters) -> BeamSurvival:
+        """the tracking of :meth:`compute_beam_survival`, under the calculation lock"""
+        settings = self.beam_survival_settings
+        _, __, elem_data = optics_parameters
+        start = elem_data[0]
+        emittance_x, sigma_e = self.acc.emittance_and_energy_spread()
+        emittance_y = emittance_x * settings.vertical_emittance_ratio
+        sigma_x = math.sqrt(emittance_x * start["beta"][0] + (start["dispersion"][0] * sigma_e) ** 2)
+        sigma_y = math.sqrt(emittance_y * start["beta"][1] + (start["dispersion"][2] * sigma_e) ** 2)
+        a_x, a_y = settings.n_sigma * sigma_x, settings.n_sigma * sigma_y
+        offsets = [(0.0, 0.0), (a_x, 0.0), (-a_x, 0.0), (0.0, a_y), (0.0, -a_y)]
+
+        p0 = np.tile(np.asarray(start["closed_orbit"], dtype=float).reshape(6, 1), (1, len(offsets)))
+        for col, (dx, dy) in enumerate(offsets):
+            p0[0, col] += dx
+            p0[2, col] += dy
+        t0 = time.time()
+        _, __, track_data = self.acc.track(p0, n_turns=settings.n_turns, data_needed_at_element_index=[],
+                                           losses=True)
+        lost = [bool(v) for v in track_data["loss_map"]["islost"]]
+        logger.info("beam survival: %d particles, %d turns, %d lost, took %.2f s",
+                    len(offsets), settings.n_turns, sum(lost), time.time() - t0)
+        return BeamSurvival(
+            stored=not any(lost), closed_orbit=True, n_turns=settings.n_turns, n_sigma=settings.n_sigma,
+            sigma=(sigma_x, sigma_y), offsets=offsets, lost=lost,
+        )
 
     def compute_track_using_track_start(self) -> NPStatesForTurns:
         start = self.virtual_element["turn_by_turn_start"]
