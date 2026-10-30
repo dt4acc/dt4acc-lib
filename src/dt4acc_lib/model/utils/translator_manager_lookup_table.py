@@ -37,6 +37,27 @@ class PolynomCoefficients:
 
 
 @dataclass
+class PolynomialCalibration:
+    """lattice = polyval(coeffs, device / scale) [/ brho]: a calibration given
+    as a polynomial, as MML's ``amp2k`` (e.g. the MLS sextupoles)
+
+    ``coeffs``: highest order first (numpy's ``polyval``, MATLAB's
+    ``polyval``). ``energy_dependent``: the polynomial gives the field (e.g.
+    ``K * Brho``), divided by the beam's brho. ``range``: the setpoints the
+    polynomial is valid for; device -> lattice is not restricted to it,
+    lattice -> device picks the solution in it if there is one.
+    """
+
+    coeffs: Sequence[float]
+    #: does the conversion depend on the beam energy
+    energy_dependent: bool
+    #: the device value is divided by it before the polynomial is evaluated
+    scale: float = 1.0
+    #: setpoints the polynomial is valid for
+    range: Optional["Range"] = None
+
+
+@dataclass
 class Range:
     min: float
     max: float
@@ -114,6 +135,7 @@ class TranslatorLookupTableElement:
     # otherwise it will get **always** instantiated
     conversion_info: Union[
         PolynomCoefficients,
+        PolynomialCalibration,
         TuneConversionCoefficients,
         MultiplyerScaledByEnergy,
         NeedsAReference,
