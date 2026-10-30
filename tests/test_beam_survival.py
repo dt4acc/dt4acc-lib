@@ -5,7 +5,9 @@ import at
 import numpy as np
 import pytest
 
+from dt4acc_lib.bl.beam_survival import beam_size, survival_offsets, survival_start_vectors
 from dt4acc_lib.model.output.beam_survival import BeamSurvival, BeamSurvivalSettings
+from dt4acc_lib.model.output.track import ParticleState
 from dt4acc_lib.pyat_simulator.accelerator_simulator import PyATAcceleratorSimulator
 from dt4acc_lib.pyat_simulator.simulator_backend import SimulatorBackend
 
@@ -56,6 +58,11 @@ def test_lost_at_an_aperture():
     r, _ = survival(ring(aperture=[a, 1.0]), n_sigma=20.0)
     assert not r.stored and r.closed_orbit
     assert r.lost == [False, True, True, False, False]
+    # where and when: at the aperture (on D0), in a turn within n_turns
+    assert r.losses.element == [None, "D0", "D0", None, None]
+    assert [t is None for t in r.losses.turn] == [True, False, False, True, True]
+    assert all(0 <= t < r.n_turns for t in r.losses.turn if t is not None)
+    assert abs(r.losses.coord[1][0]) > a / 2
 
 
 def test_no_closed_orbit():
@@ -68,3 +75,27 @@ def test_emittance_and_energy_spread():
     ex, se = PyATAcceleratorSimulator(at_lattice=ring()).emittance_and_energy_spread()
     rp = ring().radiation_parameters()
     assert ex == pytest.approx(rp.emittances[0]) and se == pytest.approx(rp.sigma_e)
+
+
+def test_compute_track_losses_only_if_asked():
+    backend = SimulatorBackend(acc=PyATAcceleratorSimulator(at_lattice=ring(aperture=[1e-3, 1.0])), name="ring")
+    p0 = [ParticleState(0.0, 0.0, 0.0, 0.0, 0.0, 0.0), ParticleState(5e-3, 0.0, 0.0, 0.0, 0.0, 0.0)]
+    assert backend.compute_track(p0, 3, ["BPM0"]).losses is None
+    track = backend.compute_track(p0, 3, ["BPM0"], losses=True)
+    assert track.losses.lost == [False, True] and track.losses.element == [None, "D0"]
+    # the same particle is NaN in the recorded data: the turn by turn "survived"
+    assert list(track.for_element("BPM0").get_survived().get_n_particles_survived_per_turn()) == [1, 1, 1]
+
+
+def test_beam_size():
+    sx, sy = beam_size([4.0, 9.0], [0.5, 0.0, 0.0, 0.0], (1e-9, 1e-11), 1e-3)
+    assert sx == pytest.approx(np.sqrt(4e-9 + 0.25e-6)) and sy == pytest.approx(np.sqrt(9e-11))
+
+
+def test_survival_start_vectors():
+    offsets = survival_offsets((1e-4, 2e-5), 5.0)
+    assert offsets == [(0.0, 0.0), (5e-4, 0.0), (-5e-4, 0.0), (0.0, 1e-4), (0.0, -1e-4)]
+    co = [1e-5, 0.0, -1e-6, 0.0, 0.0, 0.0]
+    p0 = survival_start_vectors(co, offsets)
+    assert [p.x for p in p0] == pytest.approx([1e-5, 5.1e-4, -4.9e-4, 1e-5, 1e-5])
+    assert [p.y for p in p0] == pytest.approx([-1e-6, -1e-6, -1e-6, 9.9e-5, -1.01e-4])

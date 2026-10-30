@@ -124,8 +124,15 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
 
         ``start_index``: track from that element on (the lattice rotated to start
         there, the same element objects); ``data_needed_at_element_index`` counts
-        from it. ``losses``: pyAT's loss map in the returned track data
-        (``loss_map``).
+        from it.
+
+        ``losses``: pyAT fills its loss map (``trackdata["loss_map"]``): per
+        particle if it is lost (``islost``), the turn (``turn``), the element
+        index (``elem``, counted from ``start_index``) and the coordinates
+        (``coord``) when it was lost. Lost or not does not depend on it: pyAT
+        always sets a lost particle's coordinates to NaN (``at.c``:
+        ``checkiflost``). It says where and when, for the beam survival and
+        loss monitors. Without ``losses`` the loss map's content is undefined.
         """
         lattice = self.acc.rotate(start_index) if start_index else self.acc
         r = at.tracking.lattice_track(
