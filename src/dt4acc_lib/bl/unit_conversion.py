@@ -10,7 +10,7 @@ from dt4acc_lib.model.utils.command import ReadCommand
 from dt4acc_lib.model.utils.translator_manager_lookup_table import (
     CurvePoint,
     MultiplyerScaledByEnergy,
-    PolynomialCalibration,
+    PolynomCoefficients,
 )
 
 logger = logging.getLogger("dt4acc_lib")
@@ -160,14 +160,15 @@ class EnergyIndependentCurveUnitConversion(StateConversion):
 
 
 class PolynomialUnitConversion(StateConversion):
-    """Calibration given as a polynomial: current <-> magnet strength
+    """Calibration given as a polynomial of the device value: current <-> magnet strength
 
-    With p = ``calibration.coeffs`` (highest order first), s =
-    ``calibration.scale`` and b = brho if ``calibration.energy_dependent``
-    else 1:
+    For ``PolynomCoefficients`` with ``polynomial_of="device"``. With p =
+    ``calibration.coeffs`` (lowest order first), s = ``calibration.scale`` and
+    b = brho (divided by ``reference_brho`` if given) if
+    ``calibration.energy_dependent`` else 1:
 
-    - inverse(I) -> k = polyval(p, I / s) / b            (device -> lattice)
-    - forward(k) -> I with polyval(p, I / s) = k * b      (lattice -> device)
+    - inverse(I) -> k = p(I / s) / b            (device -> lattice)
+    - forward(k) -> I with p(I / s) = k * b      (lattice -> device)
 
     as MML's ``amp2k`` / ``k2amp``. forward() solves for the roots of the
     polynomial and, as MML's MLS ``k2amp`` does, takes the real root closest
@@ -175,20 +176,25 @@ class PolynomialUnitConversion(StateConversion):
     one in ``calibration.range`` if any is.
     """
 
-    def __init__(self, *, calibration: PolynomialCalibration, brho: float):
-        coeffs = np.trim_zeros(np.asarray(calibration.coeffs, dtype=float), "f")
+    def __init__(self, *, calibration: PolynomCoefficients, brho: float):
+        # numpy's polyval / roots: highest order first
+        coeffs = np.trim_zeros(np.asarray(calibration.coeffs, dtype=float)[::-1], "f")
         if len(coeffs) < 2:
             raise ValueError(f"{calibration}: a polynomial of order 0 can not be inverted")
         if coeffs[-2] == 0:
             raise ValueError(f"{calibration}: no linear term, no linear solution to pick a root by")
         if calibration.scale == 0:
             raise ValueError(f"{calibration}: scale must be non-zero")
+        if calibration.reference_brho is not None and not calibration.energy_dependent:
+            raise ValueError(f"{calibration}: reference_brho needs energy_dependent")
         self.calibration = calibration
         self.coeffs = coeffs
         self.scale = float(calibration.scale)
         self.brho = float(brho) if calibration.energy_dependent else 1.0
         if self.brho == 0:
             raise ValueError("brho must be non-zero")
+        if calibration.reference_brho is not None:
+            self.brho /= float(calibration.reference_brho)
 
     def forward(self, state: float) -> float:
         logger.info(

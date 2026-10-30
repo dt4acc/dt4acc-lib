@@ -18,7 +18,6 @@ from dt4acc_lib.model.utils.identifiers import ConversionID
 from dt4acc_lib.model.utils.translator_manager_lookup_table import (
     TranslatorLookupTable,
     PolynomCoefficients,
-    PolynomialCalibration,
     TuneConversionCoefficients,
     IdentityMapper,
     MultiplyerScaledByEnergy,
@@ -124,8 +123,7 @@ class TranslatorService(TranslatorServiceBase):
 
 def create_translation_object_for_data_model(
     data_model: Union[
-        PolynomCoefficients | TuneConversionCoefficients, PolynomialCalibration, MultiplyerScaledByEnergy,
-        NeedsAReference
+        PolynomCoefficients | TuneConversionCoefficients, MultiplyerScaledByEnergy, NeedsAReference
     ],
     brho: float,
 ):
@@ -133,8 +131,6 @@ def create_translation_object_for_data_model(
         return identity_conversion
     if isinstance(data_model, PolynomCoefficients):
         return create_translation_object_for_polynom_coefficients(data_model, brho)
-    elif isinstance(data_model, PolynomialCalibration):
-        return PolynomialUnitConversion(calibration=data_model, brho=brho)
     elif isinstance(data_model, TuneConversionCoefficients):
         return create_translation_object_for_tune(data_model)
     elif isinstance(data_model, MultiplyerScaledByEnergy):
@@ -173,7 +169,13 @@ def create_translation_object_for_tune(
 def create_translation_object_for_polynom_coefficients(
     data_model: PolynomCoefficients,
     brho: float,
-) -> Union[LinearUnitConversion, EnergyDependentLinearUnitConversion]:
+) -> Union[LinearUnitConversion, EnergyDependentLinearUnitConversion, PolynomialUnitConversion]:
+    if data_model.polynomial_of == "device":
+        return PolynomialUnitConversion(calibration=data_model, brho=brho)
+    if data_model.polynomial_of != "lattice":
+        raise ValueError(f"{data_model}: polynomial_of must be 'lattice' or 'device'")
+    if len(data_model.coeffs) != 2:
+        raise ValueError(f"{data_model}: a polynomial of the lattice value has to be linear (intercept, slope)")
     intercept, slope = data_model.coeffs
     if data_model.reference_brho is not None:
         if not data_model.energy_dependent:
