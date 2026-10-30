@@ -10,6 +10,7 @@ from dt4acc_lib.model.utils.command import ReadCommand
 from dt4acc_lib.model.utils.translator_manager_lookup_table import (
     CurvePoint,
     MultiplyerScaledByEnergy,
+    PolynomCoefficients,
 )
 
 logger = logging.getLogger("dt4acc_lib")
@@ -158,6 +159,71 @@ class EnergyIndependentCurveUnitConversion(StateConversion):
         return self._sign() * dep / (self.brho * self.length)
 
 
+class PolynomialUnitConversion(StateConversion):
+    """Calibration given as a polynomial of the device value: current <-> magnet strength
+
+    For ``PolynomCoefficients`` with ``polynomial_of="device"``. With p =
+    ``calibration.coeffs`` (lowest order first), s = ``calibration.scale`` and
+    b = brho (divided by ``reference_brho`` if given) if
+    ``calibration.energy_dependent`` else 1:
+
+    - inverse(I) -> k = p(I / s) / b            (device -> lattice)
+    - forward(k) -> I with p(I / s) = k * b      (lattice -> device)
+
+    as MML's ``amp2k`` / ``k2amp``. forward() solves for the roots of the
+    polynomial and, as MML's MLS ``k2amp`` does, takes the real root closest
+    to the linear solution (the polynomial's linear and constant term), the
+    one in ``calibration.range`` if any is.
+    """
+
+    def __init__(self, *, calibration: PolynomCoefficients, brho: float):
+        # numpy's polyval / roots: highest order first
+        coeffs = np.trim_zeros(np.asarray(calibration.coeffs, dtype=float)[::-1], "f")
+        if len(coeffs) < 2:
+            raise ValueError(f"{calibration}: a polynomial of order 0 can not be inverted")
+        if coeffs[-2] == 0:
+            raise ValueError(f"{calibration}: no linear term, no linear solution to pick a root by")
+        if calibration.scale == 0:
+            raise ValueError(f"{calibration}: scale must be non-zero")
+        if calibration.reference_brho is not None and not calibration.energy_dependent:
+            raise ValueError(f"{calibration}: reference_brho needs energy_dependent")
+        self.calibration = calibration
+        self.coeffs = coeffs
+        self.scale = float(calibration.scale)
+        self.brho = float(brho) if calibration.energy_dependent else 1.0
+        if self.brho == 0:
+            raise ValueError("brho must be non-zero")
+        if calibration.reference_brho is not None:
+            self.brho /= float(calibration.reference_brho)
+
+    def forward(self, state: float) -> float:
+        logger.info(
+            "%s.forward: brho %s state %s", self.__class__.__name__, self.brho, state
+        )
+        target = float(state) * self.brho
+        intercept, slope = self.coeffs[-1], self.coeffs[-2]
+        linear = (target - intercept) / slope
+        p = self.coeffs.copy()
+        p[-1] -= target
+        roots = np.roots(p)
+        real = roots.real[np.abs(roots.imag) <= 1e-9 * np.maximum(1.0, np.abs(roots.real))]
+        if len(real) == 0:
+            raise ValueError(f"{self.__class__.__name__}: no real solution for {state} ({self.calibration})")
+        rng = self.calibration.range
+        if rng is not None:
+            lo, hi = sorted((rng.min / self.scale, rng.max / self.scale))
+            inside = real[(real >= lo) & (real <= hi)]
+            if len(inside):
+                real = inside
+        return float(real[np.argmin(np.abs(real - linear))] * self.scale)
+
+    def inverse(self, state: float) -> float:
+        logger.info(
+            "%s.inverse: brho %s state %s", self.__class__.__name__, self.brho, state
+        )
+        return float(np.polyval(self.coeffs, float(state) / self.scale)) / self.brho
+
+
 class LinearCurve:
     """y(x), piecewise linear between the points, extended linearly from its
     end segments outside them (MATLAB's interp1(..., 'linear', 'extrap'))
@@ -275,6 +341,7 @@ __all__ = [
     "LinearUnitConversion",
     "EnergyIndependentCurveUnitConversion",
     "LinearCurve",
+    "PolynomialUnitConversion",
     "MultiplierScaledByEnergyUnitConversion",
     "calculate_brho_inverse",
     "calculate_brho",

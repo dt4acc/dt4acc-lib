@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Dict, Optional, Sequence, Union
+from typing import Dict, Literal, Optional, Sequence, Union
 
 from .command import ReadCommand
 # CurvePoint is defined in identifiers; importable from both modules
@@ -18,25 +18,6 @@ class IdentityMapper:
 
 
 @dataclass
-class PolynomCoefficients:
-    """device = f(lattice): ``coeffs`` = (intercept, slope)
-
-    ``energy_dependent``: the coefficients are per brho (device = brho *
-    (intercept + slope * lattice)). ``reference_brho``: the facility gives the
-    calibration as lattice value per device value at that brho (e.g. a
-    steerer's kick per current at the design energy); ``coeffs`` are then
-    taken at ``reference_brho`` and the conversion scales them with the beam's
-    brho.
-    """
-
-    coeffs: Sequence[float]
-    #: does the conversion depend on the beam energy
-    energy_dependent: bool
-    #: brho the coefficients were given at (None: they are per brho)
-    reference_brho: Optional[float] = None
-
-
-@dataclass
 class Range:
     min: float
     max: float
@@ -47,6 +28,43 @@ class Range:
     def interpolate(self, lambda_: float):
         """A value that is 0 at min and 1 at max"""
         return self.min * (1 - lambda_) + self.max * lambda_
+
+
+@dataclass
+class PolynomCoefficients:
+    """A calibration given as a polynomial, ``coeffs`` lowest order first
+
+    ``polynomial_of`` says what the polynomial is a function of:
+
+    * ``"lattice"``: device = brho * (c0 + c1 * lattice), linear only.
+      ``energy_dependent``: the coefficients are per brho, else brho = 1.
+    * ``"device"``: lattice = (c0 + c1 * x + c2 * x**2 + ...) / brho, with
+      x = device / ``scale``, of any order, as MML's ``amp2k`` (e.g. the MLS
+      sextupoles: the polynomial gives ``K * Brho``). lattice -> device
+      solves for the root, as MML's ``k2amp``: the real one closest to the
+      linear solution, the one in ``range`` if any is. ``energy_dependent``:
+      divided by the beam's brho, else brho = 1.
+
+    Both are the same thing for a linear calibration, only written the other
+    way round; "device" is needed for higher orders, where the inverse is no
+    polynomial any more.
+
+    ``reference_brho``: the facility gives the calibration at that brho (e.g.
+    a steerer's kick per current at the design energy); the conversion
+    scales it with the beam's brho. Needs ``energy_dependent``.
+    """
+
+    coeffs: Sequence[float]
+    #: does the conversion depend on the beam energy
+    energy_dependent: bool
+    #: brho the coefficients were given at (None: they are per brho)
+    reference_brho: Optional[float] = None
+    #: the polynomial is a function of the lattice value or the device value
+    polynomial_of: Literal["lattice", "device"] = "lattice"
+    #: "device" only: the device value is divided by it before the polynomial is evaluated
+    scale: float = 1.0
+    #: "device" only: setpoints the polynomial is valid for
+    range: Optional[Range] = None
 
 
 @dataclass
