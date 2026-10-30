@@ -18,12 +18,15 @@ import numpy as np
 import numpy.typing as npt
 from transitions import Machine
 
+from dt4acc_lib.bl.beam_survival import beam_size, survival_offsets, survival_start_vectors
 from dt4acc_lib.interfaces.backend.backend import SimulatorBackendRW
 from dt4acc_lib.interfaces.simulator.accelerator_simulator import AcceleratorSimulatorInterface, OpticsCalculationError, \
     OpticsCalculationProhibitedError
 from dt4acc_lib.interfaces.backend.calculation_states import CalculationStates
 from dt4acc_lib.interfaces.simulator.result_element import ResultElement
 from dt4acc_lib.interfaces.simulator.virtual_element import VirtualElementInterface
+from dt4acc_lib.model.output.beam_survival import BeamSurvival, BeamSurvivalSettings
+from dt4acc_lib.model.output.particle_losses import ParticleLosses
 from dt4acc_lib.model.output.calculated_track import CalculatedTrack, CalculatedPosition
 from dt4acc_lib.model.output.survey import SurveyDataForElement
 from dt4acc_lib.model.output.tune import Tune, Chromaticity
@@ -242,6 +245,18 @@ class ChromaticityElement(ResultElement):
         return Chromaticity(x=math.nan, y=math.nan)
 
 
+class BeamSurvivalElement(ResultElement):
+    """Is the beam stored: particles around the closed orbit tracked for
+    some turns (:meth:`SimulatorBackend.compute_beam_survival`)"""
+
+    def __init__(self, backend):
+        self.backend = backend
+
+    def get(self, prop_id: str) -> Union[BeamSurvival, None]:
+        assert prop_id == "stored", f"Only prepared to handle stored but got {prop_id}"
+        return self.backend.compute_beam_survival()
+
+
 class SurveyElement(ResultElement):
     """
     """
@@ -286,13 +301,18 @@ class SimulatorBackend(SimulatorBackendRW):
     """
 
     def __init__(
-        self, *, acc: AcceleratorSimulatorInterface, name: str, logger=logger, calculation_lock=None
+        self, *, acc: AcceleratorSimulatorInterface, name: str, logger=logger, calculation_lock=None,
+        beam_survival_settings: Optional[BeamSurvivalSettings] = None,
     ):
         self.acc = acc
         self.logger = logger
         self.name = name
+        self.beam_survival_settings = (
+            BeamSurvivalSettings() if beam_survival_settings is None else beam_survival_settings
+        )
 
         self.optics = None
+        self.beam_survival = None
         # These "must" be unique
         self.elem_uids = None
         # These are allowed to repeat
@@ -339,6 +359,7 @@ class SimulatorBackend(SimulatorBackendRW):
             chromaticity=ChromaticityElement(backend=self),
             twiss=TwissElement(backend=self),
             survey=SurveyElement(backend=self),
+            beam_survival=BeamSurvivalElement(backend=self),
         )
         # These elments provide info to be filled form outside
         # so that it is available in the calculation when needed
@@ -351,6 +372,7 @@ class SimulatorBackend(SimulatorBackendRW):
 
     def _clear_stored_results(self):
         self.optics = None
+        self.beam_survival = None
 
     def get_natural_view_name(self):
         return "design"
@@ -523,6 +545,57 @@ class SimulatorBackend(SimulatorBackendRW):
         ]
         return r
 
+    def compute_beam_survival(self) -> Union[BeamSurvival, None]:
+        """Is the beam stored: the closed orbit and particles at +- n_sigma
+        beam sizes in x and y around it, tracked from the start of the
+        lattice for n_turns
+
+        The work flow; the computations are in :mod:`dt4acc_lib.bl.beam_survival`,
+        the tracking is :meth:`compute_track` (as for the turn by turn data):
+        a particle is lost as pyAT decides it (see ``ParticleLosses``);
+        without apertures in the lattice that is when it leaves the dynamic
+        aperture.
+
+        Stored if a closed orbit exists and no particle is lost. None for a
+        transfer line. Kept until the lattice changes; the tracking holds the
+        calculation lock, so no set changes the lattice while it runs.
+        """
+        if not self.acc.is_ring:
+            return None
+        settings = self.beam_survival_settings
+        _, __, optics_parameters = self.get_optics()
+        if optics_parameters is None:
+            return BeamSurvival(stored=False, closed_orbit=False, n_turns=settings.n_turns,
+                                n_sigma=settings.n_sigma, sigma=(math.nan, math.nan))
+        with self.calculation_lock:
+            if self.optics is not optics_parameters:
+                # the lattice changed meanwhile: start over on the new optics
+                retry = True
+            else:
+                retry = False
+                if self.beam_survival is None:
+                    self.beam_survival = self._track_beam_survival(optics_parameters)
+                r = self.beam_survival
+        return self.compute_beam_survival() if retry else r
+
+    def _track_beam_survival(self, optics_parameters) -> BeamSurvival:
+        """:meth:`compute_beam_survival` for these optics, under the calculation lock"""
+        settings = self.beam_survival_settings
+        _, __, elem_data = optics_parameters
+        start = elem_data[0]
+        emittance_x, sigma_e = self.acc.emittance_and_energy_spread()
+        emittance = (emittance_x, emittance_x * settings.vertical_emittance_ratio)
+        sigma = beam_size(start["beta"], start["dispersion"], emittance, sigma_e)
+        offsets = survival_offsets(sigma, settings.n_sigma)
+        p0 = survival_start_vectors(start["closed_orbit"], offsets)
+        # recorded at the first element only: the losses are what is needed
+        track = self.compute_track(p0, settings.n_turns, self.get_element_uids()[:1], losses=True)
+        losses = track.losses
+        return BeamSurvival(
+            stored=not any(losses.lost), closed_orbit=True, n_turns=settings.n_turns, n_sigma=settings.n_sigma,
+            sigma=sigma, offsets=offsets, losses=losses,
+        )
+
     def compute_track_using_track_start(self) -> NPStatesForTurns:
         start = self.virtual_element["turn_by_turn_start"]
         return self.compute_track(
@@ -530,13 +603,16 @@ class SimulatorBackend(SimulatorBackendRW):
         )
 
     def compute_track(
-        self, p0: Sequence[ParticleState], n_turns: int, data_needed_at: Sequence[str], start_at: Optional[str] = None
+        self, p0: Sequence[ParticleState], n_turns: int, data_needed_at: Sequence[str], start_at: Optional[str] = None,
+        losses: bool = False,
     ) -> NPStatesForTurns:
         """Track ``p0`` for ``n_turns``, recorded at ``data_needed_at``
 
         ``start_at``: the element tracking starts at (None: the start of the
         lattice); turns are counted from there, the data come in the order
-        the beam passes the elements.
+        the beam passes the elements. ``losses``: also where and when the
+        particles are lost (``NPStatesForTurns.losses``), e.g. for the beam
+        survival or loss monitors.
         """
         # That should be really fast ... no need to go further if that
         # can not be achieved
@@ -561,8 +637,8 @@ class SimulatorBackend(SimulatorBackendRW):
             raise AssertionError("No start vector given for tracking!")
 
         start = time.time()
-        track_data, info, loss_map = self.acc.track(
-            p0, n_turns=n_turns, data_needed_at_element_index=indices, start_index=start_index
+        track_data, info, extra = self.acc.track(
+            p0, n_turns=n_turns, data_needed_at_element_index=indices, start_index=start_index, losses=losses
         )
         end = time.time()
         dt = end - start
@@ -570,7 +646,10 @@ class SimulatorBackend(SimulatorBackendRW):
             "Computing %d turns took %s", n_turns, dt
         )
 
-        return NPStatesForTurns(fill_turns_to_element(track_data, sel_elem_uids))
+        return NPStatesForTurns(
+            fill_turns_to_element(track_data, sel_elem_uids),
+            losses=particle_losses(extra["loss_map"], elem_uids, start_index) if losses else None,
+        )
 
         # return track_data
         track_data_model = fill_state_per_element(track_data, data_needed_at)
@@ -582,6 +661,19 @@ def fill_turns_to_element(track_data: npt.NDArray[np.floating], elem_uids: Seque
         NPStatePerElementPerTurn(observed_at_element, uid=uid)
         for observed_at_element, uid in zip(track_data.transpose(2, 0, 1, 3), elem_uids)
     ]
+
+
+def particle_losses(loss_map, elem_uids: Sequence[str], start_index: int = 0) -> ParticleLosses:
+    """pyAT's loss map as ParticleLosses; its element index counts from
+    ``start_index`` (the lattice rotated to start there)"""
+    n_elem = len(elem_uids)
+    lost = [bool(v) for v in loss_map["islost"]]
+    return ParticleLosses(
+        lost=lost,
+        turn=[int(t) if l else None for l, t in zip(lost, loss_map["turn"])],
+        element=[elem_uids[(int(e) + start_index) % n_elem] if l else None for l, e in zip(lost, loss_map["elem"])],
+        coord=[tuple(float(v) for v in c) if l else None for l, c in zip(lost, loss_map["coord"])],
+    )
 
 
 def fill_state_per_element(track_data, elm_uids: Sequence[str]) -> Sequence[StatePerTurn]:

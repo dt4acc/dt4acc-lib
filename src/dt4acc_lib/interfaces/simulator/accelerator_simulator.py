@@ -6,7 +6,7 @@ Todo:
 
 """
 from abc import ABCMeta, abstractmethod
-from typing import Sequence
+from typing import Sequence, Tuple
 
 from .element import ElementInterface
 from ...model.output.survey import SurveyDataForElement
@@ -53,6 +53,7 @@ class AcceleratorSimulatorInterface(metaclass=ABCMeta):
         Args:
             p0: start vector
             n_turns: number of turns
+            losses: (keyword, if supported) return the loss map too
 
 
         Returns:
@@ -66,6 +67,11 @@ class AcceleratorSimulatorInterface(metaclass=ABCMeta):
             do we need to be able to start tracking at any point?
             Work on tracking output
         """
+
+    def emittance_and_energy_spread(self) -> Tuple[float, float]:
+        """horizontal emittance [m rad] and relative energy spread of the
+        equilibrium beam (rings)"""
+        raise NotImplementedError("use derived class instead")
 
     @abstractmethod
     def get_survey(self) -> Sequence[SurveyDataForElement]:
