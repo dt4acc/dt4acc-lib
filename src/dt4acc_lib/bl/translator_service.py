@@ -9,6 +9,7 @@ from dt4acc_lib.bl.unit_conversion import (
     LinearUnitConversion,
     EnergyDependentLinearUnitConversion,
     MultiplierScaledByEnergyUnitConversion,
+    PolynomialUnitConversion,
     UnitConversionAroundReferenceValue,
 )
 from dt4acc_lib.interfaces.utils.state_conversion import StateConversion
@@ -168,7 +169,13 @@ def create_translation_object_for_tune(
 def create_translation_object_for_polynom_coefficients(
     data_model: PolynomCoefficients,
     brho: float,
-) -> Union[LinearUnitConversion, EnergyDependentLinearUnitConversion]:
+) -> Union[LinearUnitConversion, EnergyDependentLinearUnitConversion, PolynomialUnitConversion]:
+    if data_model.polynomial_of == "device":
+        return PolynomialUnitConversion(calibration=data_model, brho=brho)
+    if data_model.polynomial_of != "lattice":
+        raise ValueError(f"{data_model}: polynomial_of must be 'lattice' or 'device'")
+    if len(data_model.coeffs) != 2:
+        raise ValueError(f"{data_model}: a polynomial of the lattice value has to be linear (intercept, slope)")
     intercept, slope = data_model.coeffs
     if data_model.reference_brho is not None:
         if not data_model.energy_dependent:
