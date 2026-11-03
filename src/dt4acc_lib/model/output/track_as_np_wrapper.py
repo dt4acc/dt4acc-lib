@@ -4,11 +4,12 @@
 from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
-from typing import Sequence
+from typing import Optional, Sequence
 
 import numpy as np
 import numpy.typing as npt
 
+from .particle_losses import ParticleLosses
 from .track import ParticleState
 
 
@@ -229,6 +230,8 @@ class NPStatePerElementPerTurn:
 @dataclass
 class NPStatesForTurns:
     per_element: Sequence[NPStatePerElementPerTurn]
+    #: where and when particles are lost; only if asked for (``compute_track(..., losses=True)``)
+    losses: Optional[ParticleLosses] = None
 
     def for_element(self, uid: str):
         idx = self.index_for_uid(uid)
