@@ -80,6 +80,17 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
     def reinit(self):
         self.acc = copy.deepcopy(self.acc_orig_store)
 
+    def replace_lattice(self, at_lattice: at.Lattice):
+        """Simulate ``at_lattice`` from now on, in place of the lattice given so far
+
+        Not checked: whatever refers to elements by their ids must still find
+        them in ``at_lattice``. The application checks that before, e.g. with
+        :func:`check_replacement`.
+        ``reinit`` returns to ``at_lattice`` from now on.
+        """
+        self.acc_orig_store = copy.deepcopy(at_lattice)
+        self.reinit()
+
     def get_optics_parameters(self):
         assert self.acc is not None, \
             f"{self.__class__.__name__} is not properly initialised"
@@ -158,4 +169,45 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
         return self.proxy_factory.get_proxy(element, element_id=element_id)
 
 
-__all__ = ["PyATAcceleratorSimulator"]
+class LatticeMismatch(ValueError):
+    """A lattice can not replace the present one: elements are missing or reordered"""
+
+
+def _first_index_by_id(lattice: at.Lattice) -> dict:
+    """{element id: index of its first element}; the UUID wins over the FamName, as in
+    :meth:`PyATAcceleratorSimulator.get`"""
+    by_famname, by_uuid = {}, {}
+    for i, elem in enumerate(lattice):
+        by_famname.setdefault(getattr(elem, "FamName", None), i)
+        uuid = getattr(elem, "UUID", None)
+        if uuid is not None:
+            by_uuid.setdefault(uuid, i)
+    return {**by_famname, **by_uuid}
+
+
+def check_replacement(present: at.Lattice, new: at.Lattice, required_elements: Sequence[str]) -> None:
+    """Raise :class:`LatticeMismatch` unless each of ``required_elements`` is in ``new``,
+    in the same order as in ``present``
+
+    For a lattice that differs from the present one in details only (e.g.
+    insertion devices added). ``required_elements``: UUIDs or FamNames, found
+    as by :meth:`PyATAcceleratorSimulator.get`; other elements may differ.
+    The application runs it before replacing a lattice, or a check of its own.
+    Elements missing from ``present`` too are not checked: nothing can refer to them.
+    """
+    index_present, index_new = _first_index_by_id(present), _first_index_by_id(new)
+    required = [name for name in dict.fromkeys(required_elements) if name in index_present]
+    missing = [name for name in required if name not in index_new]
+    if missing:
+        raise LatticeMismatch(
+            f"{len(missing)} element(s) not in the new lattice: {', '.join(missing[:10])}"
+            + (" ..." if len(missing) > 10 else "")
+        )
+    in_order = sorted(required, key=index_present.__getitem__)
+    positions = [index_new[name] for name in in_order]
+    for (a, pa), (b, pb) in zip(zip(in_order, positions), zip(in_order[1:], positions[1:])):
+        if pb <= pa:
+            raise LatticeMismatch(f"element order differs: {a!r} is no longer before {b!r}")
+
+
+__all__ = ["PyATAcceleratorSimulator", "LatticeMismatch", "check_replacement"]

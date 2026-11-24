@@ -381,6 +381,18 @@ class SimulatorBackend(SimulatorBackendRW):
         self.acc.reinit()
         await self.reset()
 
+    async def load_lattice(self, at_lattice):
+        """Simulate ``at_lattice`` from now on, see
+        :meth:`PyATAcceleratorSimulator.replace_lattice` (the lattice is not
+        checked: the application does that before)
+
+        Swapped under the calculation lock, then reset: the results of the
+        present lattice are dropped and the model recomputes.
+        """
+        with self.calculation_lock:
+            self.acc.replace_lattice(at_lattice)
+        await self.reset()
+
     async def acknowledge(self):
         self.model.acknowledge()
 
