@@ -60,7 +60,7 @@ def test_lattice_with_an_insertion_replaces_the_present_one():
     qx0, qy0 = tune(backend)
 
     new = ring(with_insertion=True, kf=0.91)
-    asyncio.run(backend.load_lattice(new, required_elements=devices(new)))
+    asyncio.run(backend.load_lattice(new))
 
     assert backend.get_element_names() == [e.FamName for e in new] + [new[0].FamName]
     assert len(backend.get_element_names()) == len(names_before) + 4
@@ -76,21 +76,28 @@ def test_lattice_with_an_insertion_replaces_the_present_one():
 def test_reinit_returns_to_the_replacing_lattice():
     simulator = PyATAcceleratorSimulator(at_lattice=ring())
     new = ring(with_insertion=True)
-    simulator.replace_lattice(new, required_elements=devices(new))
+    simulator.replace_lattice(new)
     simulator.acc[3].KickAngle = np.array([0.0, 5e-4])  # a change made in the twin
     simulator.reinit()
     assert len(simulator.acc) == len(new)
     np.testing.assert_allclose(simulator.acc[3].KickAngle, [0.0, 1e-4])
 
 
-def test_a_missing_element_is_refused_and_the_lattice_kept():
+def test_a_missing_element_is_refused():
     present = ring()
-    simulator = PyATAcceleratorSimulator(at_lattice=present)
     new = ring(with_insertion=True)
     del new[[e.FamName for e in new].index("QF3")]
     with pytest.raises(LatticeMismatch, match="QF3"):
-        simulator.replace_lattice(new, required_elements=devices(present))
-    assert [e.FamName for e in simulator.acc] == [e.FamName for e in present]
+        check_replacement(present, new, devices(present))
+
+
+def test_replacing_does_not_check():
+    """the check is the application's: without it any lattice is taken"""
+    simulator = PyATAcceleratorSimulator(at_lattice=ring())
+    new = ring()
+    del new[[e.FamName for e in new].index("QF3")]
+    simulator.replace_lattice(new)
+    assert [e.FamName for e in simulator.acc] == [e.FamName for e in new]
 
 
 def test_reordered_elements_are_refused():

@@ -80,21 +80,14 @@ class PyATAcceleratorSimulator(AcceleratorSimulatorInterface):
     def reinit(self):
         self.acc = copy.deepcopy(self.acc_orig_store)
 
-    def replace_lattice(self, at_lattice: at.Lattice, required_elements: Sequence[str] = ()):
+    def replace_lattice(self, at_lattice: at.Lattice):
         """Simulate ``at_lattice`` from now on, in place of the lattice given so far
 
-        For a lattice that differs from the present one in details only
-        (e.g. insertion devices added), so that whatever refers to elements
-        by their ids keeps working: each of ``required_elements`` (UUID or
-        FamName, found as by :meth:`get`) must be in ``at_lattice``, in the
-        same order as in the present lattice. Other elements may differ.
+        Not checked: whatever refers to elements by their ids must still find
+        them in ``at_lattice``. The application checks that before, e.g. with
+        :func:`check_replacement`.
         ``reinit`` returns to ``at_lattice`` from now on.
-
-        Raises:
-            LatticeMismatch: an element is missing or out of order;
-                the present lattice is kept
         """
-        check_replacement(self.acc_orig_store, at_lattice, required_elements)
         self.acc_orig_store = copy.deepcopy(at_lattice)
         self.reinit()
 
@@ -196,6 +189,10 @@ def check_replacement(present: at.Lattice, new: at.Lattice, required_elements: S
     """Raise :class:`LatticeMismatch` unless each of ``required_elements`` is in ``new``,
     in the same order as in ``present``
 
+    For a lattice that differs from the present one in details only (e.g.
+    insertion devices added). ``required_elements``: UUIDs or FamNames, found
+    as by :meth:`PyATAcceleratorSimulator.get`; other elements may differ.
+    The application runs it before replacing a lattice, or a check of its own.
     Elements missing from ``present`` too are not checked: nothing can refer to them.
     """
     index_present, index_new = _first_index_by_id(present), _first_index_by_id(new)
