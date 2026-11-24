@@ -56,6 +56,8 @@ class TurnByTurnStart(VirtualElementInterface):
         self._data_needed_at: List[str] = []
         #: element the tracking starts at; None: the start of the lattice
         self._start_at: Optional[str] = None
+        #: elements the beam ends at; empty: none
+        self._stops: List[str] = []
         self.count_runs = itertools.count()
         self.run_id = next(self.count_runs)
 
@@ -66,6 +68,7 @@ class TurnByTurnStart(VirtualElementInterface):
             f", p0={self.get_p0()}"
             f", data_needed_at={self.get_data_needed_at()}"
             f", start_at={self.get_start_at()}"
+            f", stops={self.get_stops()}"
             f", run_id={self.run_id}"
             ")"
         )
@@ -93,6 +96,16 @@ class TurnByTurnStart(VirtualElementInterface):
         """Track from this element (e.g. an injection point): turn 1 starts there"""
         self._start_at = element or None
 
+    def get_stops(self) -> Sequence[str]:
+        return list(self._stops)
+
+    def set_stops(self, elements: Optional[Sequence[str]]):
+        """The beam ends at the first of these elements it reaches (see
+        :meth:`SimulatorBackend.compute_track`); None or empty: no stop"""
+        if isinstance(elements, str):
+            raise TypeError(f"stops: expected a sequence of element ids, got the string {elements!r}")
+        self._stops = list(elements or [])
+
     def set_p0(self, p0):
         # Todo: which checks to apply
         # at is picky on this shape
@@ -110,6 +123,7 @@ class TurnByTurnStart(VirtualElementInterface):
             "data_needed_at": self.get_data_needed_at(),
             "p0": self.get_p0(),
             "start_at": self.get_start_at(),
+            "stops": self.get_stops(),
             "start": self.get_run(),
         }[prop_id]
 
@@ -122,6 +136,8 @@ class TurnByTurnStart(VirtualElementInterface):
             self.set_data_needed_at(data_needed_at=value)
         elif prop_id == "start_at":
             self.set_start_at(value)
+        elif prop_id == "stops":
+            self.set_stops(value)
         elif prop_id == "start":
             self.set_run()
         else:
@@ -526,17 +542,25 @@ class SimulatorBackend(SimulatorBackendRW):
     def compute_track_using_track_start(self) -> NPStatesForTurns:
         start = self.virtual_element["turn_by_turn_start"]
         return self.compute_track(
-            start.get_p0(), start.get_n_turns(), start.get_data_needed_at(), start_at=start.get_start_at()
+            start.get_p0(), start.get_n_turns(), start.get_data_needed_at(), start_at=start.get_start_at(),
+            stops=start.get_stops(),
         )
 
     def compute_track(
-        self, p0: Sequence[ParticleState], n_turns: int, data_needed_at: Sequence[str], start_at: Optional[str] = None
+        self, p0: Sequence[ParticleState], n_turns: int, data_needed_at: Sequence[str], start_at: Optional[str] = None,
+        stops: Sequence[str] = (),
     ) -> NPStatesForTurns:
         """Track ``p0`` for ``n_turns``, recorded at ``data_needed_at``
 
         ``start_at``: the element tracking starts at (None: the start of the
         lattice); turns are counted from there, the data come in the order
         the beam passes the elements.
+
+        ``stops``: elements (ids) the beam ends at: at the entrance of the
+        first one it reaches, counted from where the tracking starts. Data
+        recorded at the stop itself still show the beam (as a screen that
+        stops it); after it, and in all later turns, the beam is lost (NaN).
+        Elements sharing the id are all stops.
         """
         # That should be really fast ... no need to go further if that
         # can not be achieved
@@ -552,6 +576,11 @@ class SimulatorBackend(SimulatorBackendRW):
                 raise ValueError(f"start_at {start_at!r}: expected one element of that id, found {len(starts)}")
             (start_index,) = starts
         n_elem = len(elem_uids)
+        unknown = [stop for stop in stops if stop not in elem_uids]
+        if unknown:
+            raise ValueError(f"stops: no element {unknown} in the lattice")
+        # counted from the start, as the indices below; the first one the beam reaches
+        stop_index = min(((idx - start_index) % n_elem for idx, uid in enumerate(elem_uids) if uid in stops), default=None)
         indices = sorted((idx - start_index) % n_elem for idx, uid in enumerate(elem_uids) if uid in data_needed_at)
         assert len(indices) > 0
         sel_elem_uids = [elem_uids[(idx + start_index) % n_elem] for idx in indices]
@@ -562,19 +591,34 @@ class SimulatorBackend(SimulatorBackendRW):
 
         start = time.time()
         track_data, info, loss_map = self.acc.track(
-            p0, n_turns=n_turns, data_needed_at_element_index=indices, start_index=start_index
+            p0, n_turns=n_turns if stop_index is None else 1, data_needed_at_element_index=indices, start_index=start_index
         )
         end = time.time()
         dt = end - start
         logger.warning(
             "Computing %d turns took %s", n_turns, dt
         )
+        if stop_index is not None:
+            track_data = end_at_stop(track_data, indices, stop_index, n_turns)
 
         return NPStatesForTurns(fill_turns_to_element(track_data, sel_elem_uids))
 
         # return track_data
         track_data_model = fill_state_per_element(track_data, data_needed_at)
         return StatesForTurns(turns=track_data_model)
+
+
+def end_at_stop(
+    track_data: npt.NDArray[np.floating], indices: Sequence[int], stop_index: int, n_turns: int
+) -> npt.NDArray[np.floating]:
+    """The first turn's data [coordinate, particle, element, turn], as ``n_turns``
+    with the beam lost (NaN) after the element at ``stop_index``; ``indices``:
+    the recorded elements'"""
+    n_coordinates, n_particles, n_elements, _ = track_data.shape
+    r = np.full((n_coordinates, n_particles, n_elements, n_turns), np.nan)
+    reached = np.asarray(indices) <= stop_index
+    r[:, :, reached, 0] = track_data[:, :, reached, 0]
+    return r
 
 
 def fill_turns_to_element(track_data: npt.NDArray[np.floating], elem_uids: Sequence[str]) -> Sequence[NPStatePerElementPerTurn]:
