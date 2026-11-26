@@ -56,6 +56,8 @@ class TurnByTurnStart(VirtualElementInterface):
         self._data_needed_at: List[str] = []
         #: element the tracking starts at; None: the start of the lattice
         self._start_at: Optional[str] = None
+        #: element the beam ends at; None: no stop
+        self._stop_at: Optional[str] = None
         self.count_runs = itertools.count()
         self.run_id = next(self.count_runs)
 
@@ -66,6 +68,7 @@ class TurnByTurnStart(VirtualElementInterface):
             f", p0={self.get_p0()}"
             f", data_needed_at={self.get_data_needed_at()}"
             f", start_at={self.get_start_at()}"
+            f", stop_at={self.get_stop_at()}"
             f", run_id={self.run_id}"
             ")"
         )
@@ -93,6 +96,16 @@ class TurnByTurnStart(VirtualElementInterface):
         """Track from this element (e.g. an injection point): turn 1 starts there"""
         self._start_at = element or None
 
+    def get_stop_at(self) -> Optional[str]:
+        return self._stop_at
+
+    def set_stop_at(self, element: Optional[str]):
+        """The beam ends at this element (see :meth:`SimulatorBackend.compute_track`);
+        None or empty: no stop"""
+        if element is not None and not isinstance(element, str):
+            raise TypeError(f"stop_at: expected one element id, got {element!r}")
+        self._stop_at = element or None
+
     def set_p0(self, p0):
         # Todo: which checks to apply
         # at is picky on this shape
@@ -110,6 +123,7 @@ class TurnByTurnStart(VirtualElementInterface):
             "data_needed_at": self.get_data_needed_at(),
             "p0": self.get_p0(),
             "start_at": self.get_start_at(),
+            "stop_at": self.get_stop_at(),
             "start": self.get_run(),
         }[prop_id]
 
@@ -122,6 +136,8 @@ class TurnByTurnStart(VirtualElementInterface):
             self.set_data_needed_at(data_needed_at=value)
         elif prop_id == "start_at":
             self.set_start_at(value)
+        elif prop_id == "stop_at":
+            self.set_stop_at(value)
         elif prop_id == "start":
             self.set_run()
         else:
@@ -538,17 +554,26 @@ class SimulatorBackend(SimulatorBackendRW):
     def compute_track_using_track_start(self) -> NPStatesForTurns:
         start = self.virtual_element["turn_by_turn_start"]
         return self.compute_track(
-            start.get_p0(), start.get_n_turns(), start.get_data_needed_at(), start_at=start.get_start_at()
+            start.get_p0(), start.get_n_turns(), start.get_data_needed_at(), start_at=start.get_start_at(),
+            stop_at=start.get_stop_at(),
         )
 
     def compute_track(
-        self, p0: Sequence[ParticleState], n_turns: int, data_needed_at: Sequence[str], start_at: Optional[str] = None
+        self, p0: Sequence[ParticleState], n_turns: int, data_needed_at: Sequence[str], start_at: Optional[str] = None,
+        stop_at: Optional[str] = None,
     ) -> NPStatesForTurns:
         """Track ``p0`` for ``n_turns``, recorded at ``data_needed_at``
 
         ``start_at``: the element tracking starts at (None: the start of the
         lattice); turns are counted from there, the data come in the order
         the beam passes the elements.
+
+        ``stop_at``: the element (id) the beam ends at, at its entrance; as
+        ``start_at``, exactly one element of that id. Data recorded at the
+        stop itself still show the beam (as a screen that stops it); after
+        it, and in all later turns, the beam is lost (NaN). None: no stop.
+        One element only: which of several would be reached first is up to
+        the application.
         """
         # That should be really fast ... no need to go further if that
         # can not be achieved
@@ -564,6 +589,13 @@ class SimulatorBackend(SimulatorBackendRW):
                 raise ValueError(f"start_at {start_at!r}: expected one element of that id, found {len(starts)}")
             (start_index,) = starts
         n_elem = len(elem_uids)
+        stop_index = None
+        if stop_at is not None:
+            stops = [idx for idx, uid in enumerate(elem_uids) if uid == stop_at]
+            if len(stops) != 1:
+                raise ValueError(f"stop_at {stop_at!r}: expected one element of that id, found {len(stops)}")
+            # counted from the start, as the indices below
+            stop_index = (stops[0] - start_index) % n_elem
         indices = sorted((idx - start_index) % n_elem for idx, uid in enumerate(elem_uids) if uid in data_needed_at)
         assert len(indices) > 0
         sel_elem_uids = [elem_uids[(idx + start_index) % n_elem] for idx in indices]
@@ -574,19 +606,50 @@ class SimulatorBackend(SimulatorBackendRW):
 
         start = time.time()
         track_data, info, loss_map = self.acc.track(
-            p0, n_turns=n_turns, data_needed_at_element_index=indices, start_index=start_index
+            p0, n_turns=n_turns if stop_index is None else 1, data_needed_at_element_index=indices, start_index=start_index
         )
         end = time.time()
         dt = end - start
         logger.warning(
             "Computing %d turns took %s", n_turns, dt
         )
+        if stop_index is not None:
+            track_data = truncate_track_data_at_stop(track_data, indices, stop_index, n_turns)
 
         return NPStatesForTurns(fill_turns_to_element(track_data, sel_elem_uids))
 
         # return track_data
         track_data_model = fill_state_per_element(track_data, data_needed_at)
         return StatesForTurns(turns=track_data_model)
+
+
+def first_element_reached(
+    element_uids: Sequence[str], candidates: Sequence[str], start_at: Optional[str] = None
+) -> Optional[str]:
+    """Of ``candidates`` (element ids), the one a beam reaches first when
+    tracked from ``start_at`` (None: the start of ``element_uids``, the
+    lattice's element ids in order); None if none is in the lattice.
+
+    For applications with several possible stops: the backend tracks to one
+    (``stop_at``)."""
+    uids = list(element_uids)
+    start_index = uids.index(start_at) if start_at is not None else 0
+    n_elem = len(uids)
+    reached = sorted(((idx - start_index) % n_elem, uid) for idx, uid in enumerate(uids) if uid in set(candidates))
+    return reached[0][1] if reached else None
+
+
+def truncate_track_data_at_stop(
+    track_data: npt.NDArray[np.floating], indices: Sequence[int], stop_index: int, n_turns: int
+) -> npt.NDArray[np.floating]:
+    """The first turn's data [coordinate, particle, element, turn], as ``n_turns``
+    with the beam lost (NaN) after the element at ``stop_index``; ``indices``:
+    the recorded elements'"""
+    n_coordinates, n_particles, n_elements, _ = track_data.shape
+    r = np.full((n_coordinates, n_particles, n_elements, n_turns), np.nan)
+    reached = np.asarray(indices) <= stop_index
+    r[:, :, reached, 0] = track_data[:, :, reached, 0]
+    return r
 
 
 def fill_turns_to_element(track_data: npt.NDArray[np.floating], elem_uids: Sequence[str]) -> Sequence[NPStatePerElementPerTurn]:
@@ -626,4 +689,4 @@ def rectify_uid_for_last_element_if_needed(uids: Sequence[str], copy=True) -> Se
     return uids
 
 
-__all__ = ["SimulatorBackend"]
+__all__ = ["SimulatorBackend", "first_element_reached", "truncate_track_data_at_stop"]
